@@ -7,6 +7,14 @@ export const state = {
     angle: 0,
     size: 3,
     isBoosting: false,
+    fireCooldownMs: 0,
+    bullets: [] as {
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      ttlMs: number;
+    }[],
   },
   asteroids: [
     {
