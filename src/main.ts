@@ -1,55 +1,12 @@
 import { gamepads } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
 import { wrapWithMargin } from './util';
+import { state, type State } from './state';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
-const state = {
-  ship: {
-    x: 50,
-    y: 50,
-    dx: 0.2,
-    dy: 0.1,
-    angle: 0,
-    size: 3,
-  },
-  asteroids: [
-    {
-      x: 20,
-      y: 20,
-      dx: 0.01,
-      dy: 0.01,
-      angle: 0,
-      dangle: -0.001,
-      variant: 0,
-      size: 6,
-    },
-    {
-      x: 90,
-      y: 90,
-      dx: -0.005,
-      dy: -0.01,
-      angle: 50,
-      dangle: 0.0005,
-      variant: 1,
-      size: 3,
-    },
-    {
-      x: 40,
-      y: 90,
-      dx: -0.002,
-      dy: 0.004,
-      angle: 50,
-      dangle: 0.0005,
-      variant: 3,
-      size: 1,
-    },
-  ],
-};
-
-type State = typeof state;
-type Asteroid = (typeof state.asteroids)[number];
-type Ship = typeof state.ship;
+type Asteroid = State['asteroids'][number];
+type Ship = State['ship'];
 
 type Viewport = ReturnType<typeof computeViewport>;
 
@@ -68,7 +25,8 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   state.ship.x = wrapWithMargin(state.ship.x, worldWidthUnits, state.ship.size / 2);
   state.ship.y = wrapWithMargin(state.ship.y, worldHeightUnits, state.ship.size / 2);
 
-  if (gamepads.singlePlayer.leftStick.magnitude > 0.75) {
+  state.ship.isBoosting = gamepads.singlePlayer.leftStick.magnitude > 0.75;
+  if (state.ship.isBoosting) {
     state.ship.angle = gamepads.singlePlayer.leftStick.angle;
     state.ship.dx += Math.cos(state.ship.angle) * dt * gamepads.singlePlayer.leftStick.magnitude * 0.001;
     state.ship.dy += Math.sin(state.ship.angle) * dt * gamepads.singlePlayer.leftStick.magnitude * 0.001;
@@ -119,7 +77,7 @@ function drawShape(ctx: Ctx, segs: readonly Segment[], x: number, y: number, ang
 
 function drawShip(ctx: Ctx, ship: Ship, { v }: Viewport) {
   // todo: could store the segs and verts on state
-  const { segs } = makeShipGeometry(ship.size * v);
+  const { segs } = makeShipGeometry(ship.size * v, ship.isBoosting);
   drawShape(ctx, segs, ship.x * v, ship.y * v, ship.angle);
 }
 

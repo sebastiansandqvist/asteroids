@@ -1,6 +1,6 @@
 import { degreesToRadians } from './util';
 
-export function makeShipGeometry(size: number) {
+export function makeShipGeometry(size: number, isBoosting: boolean = false) {
   const noseX = size;
   const tailX = -size * 0.6;
   const halfY = size * 0.5;
@@ -8,21 +8,42 @@ export function makeShipGeometry(size: number) {
   const footRise = halfY * 0.4;
   const innerX = tailX + footLen;
 
-  const verts = [
-    [noseX, 0], // 0 tip
-    [tailX, halfY], // 1 rearBot
-    [innerX, footRise], // 2 innerBot
-    [innerX, -footRise], // 3 innerTop
-    [tailX, -halfY], // 4 rearTop
-  ] as const;
+  const boostApex = [tailX - footLen * 0.2, 0 * size] as const;
 
-  const segs = [
-    [verts[0], verts[4]], // tip->rearTop
-    [verts[0], verts[1]], // tip->rearBot
-    [verts[4], verts[3]], // rearTop->innerTop
-    [verts[1], verts[2]], // rearBot->innerBot
-    [verts[3], verts[2]], // base
-  ] as const;
+  const verts = isBoosting
+    ? ([
+        [noseX, 0 * size], // 0 tip
+        [tailX, halfY], // 1 rearBot
+        [innerX, footRise], // 2 innerBot
+        [innerX, -footRise], // 3 innerTop
+        [tailX, -halfY], // 4 rearTop
+        boostApex, // 5 boost apex
+      ] as const)
+    : ([
+        [noseX, 0 * size], // 0 tip
+        [tailX, halfY], // 1 rearBot
+        [innerX, footRise], // 2 innerBot
+        [innerX, -footRise], // 3 innerTop
+        [tailX, -halfY], // 4 rearTop
+      ] as const);
+
+  const segs = isBoosting
+    ? ([
+        [verts[0], verts[4]], // tip->rearTop
+        [verts[0], verts[1]], // tip->rearBot
+        [verts[4], verts[3]], // rearTop->innerTop
+        [verts[1], verts[2]], // rearBot->innerBot
+        [verts[3], verts[2]], // base
+        [verts[2], boostApex], // innerBot->boostApex
+        [verts[3], boostApex], // innerTop->boostApex
+      ] as const)
+    : ([
+        [verts[0], verts[4]], // tip->rearTop
+        [verts[0], verts[1]], // tip->rearBot
+        [verts[4], verts[3]], // rearTop->innerTop
+        [verts[1], verts[2]], // rearBot->innerBot
+        [verts[3], verts[2]], // base
+      ] as const);
 
   return { verts, segs };
 }
@@ -69,23 +90,6 @@ const asteroidVariants = [
     [185, 0.3], // bottom indent
   ],
 ] as const;
-
-export function getAsteroidVariantMaxRadius(variant: number) {
-  const n = asteroidVariants.length;
-  const idx = ((variant % n) + n) % n;
-  let max = 0;
-  let i = 0;
-  for (const verts of asteroidVariants) {
-    if (i === idx) {
-      for (const [, r] of verts) {
-        if (r > max) max = r;
-      }
-      break;
-    }
-    i++;
-  }
-  return max;
-}
 
 export function makeAsteroidGeometry(size: number, variant: number) {
   const asteroid = asteroidVariants[variant % asteroidVariants.length]!;

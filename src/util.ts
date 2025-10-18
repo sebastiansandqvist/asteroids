@@ -6,3 +6,7 @@ export function wrapWithMargin(value: number, max: number, margin: number) {
   const total = max + margin * 2;
   return ((((value + margin) % total) + total) % total) - margin;
 }
+
+export function exists<T>(value: T | undefined): value is T {
+  return value !== undefined;
+}
