@@ -1,3 +1,5 @@
+import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
+
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
 const state = {
@@ -6,13 +8,52 @@ const state = {
     y: 50,
     angle: 0,
   },
+  asteroids: [
+    {
+      x: 20,
+      y: 20,
+      dx: 0.01,
+      dy: 0.01,
+      angle: 0,
+      dangle: -0.001,
+      variant: 0,
+      size: 3,
+    },
+    {
+      x: 90,
+      y: 90,
+      dx: -0.005,
+      dy: -0.01,
+      angle: 50,
+      dangle: 0.0005,
+      variant: 1,
+      size: 1.5,
+    },
+    {
+      x: 40,
+      y: 90,
+      dx: -0.002,
+      dy: 0.004,
+      angle: 50,
+      dangle: 0.0005,
+      variant: 3,
+      size: 0.5,
+    },
+  ],
 };
 
 type State = typeof state;
+type Asteroid = (typeof state.asteroids)[number];
 
 function update(state: State, dt: number) {
   state.player.angle += 0.001 * dt;
   state.player.angle %= Math.PI * 2;
+
+  state.asteroids.forEach((asteroid) => {
+    asteroid.x += asteroid.dx * dt;
+    asteroid.y += asteroid.dy * dt;
+    asteroid.angle += asteroid.dangle * dt;
+  });
 }
 
 function draw(state: State, ctx: Ctx, rect: DOMRect) {
@@ -20,83 +61,19 @@ function draw(state: State, ctx: Ctx, rect: DOMRect) {
   const vh = rect.height / 100;
   const v = Math.min(vw, vh);
 
-  ctx.fillStyle = 'black';
-  ctx.fillRect(0, 0, rect.width, rect.height);
+  ctx.lineWidth = Math.max(v / 4, 1);
 
-  drawAsteroid(ctx, state.player.x * v, state.player.y * v, 0, 10 * v);
-  drawShip(ctx, state.player.x * v, state.player.y * v, state.player.angle, 10 * v);
-}
+  // blackout bg
+  {
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, rect.width, rect.height);
+  }
 
-// function drawShip(ctx: Ctx, x: number, y: number, angle: number, size: number) {
-//   ctx.save();
-//   ctx.translate(x, y);
-//   ctx.rotate(angle);
+  drawShip(ctx, state.player.x * v, state.player.y * v, state.player.angle, 2 * v);
 
-//   ctx.strokeStyle = 'white';
-//   ctx.lineWidth = Math.max(0.03 * size, 1);
-//   ctx.lineJoin = 'miter';
-//   ctx.lineCap = 'round';
-
-//   const noseX = size;
-//   const tailX = -size * 0.6;
-//   const halfY = size * 0.5;
-
-//   // feet geometry
-//   const footLen = size * 0.25;
-//   const footRise = halfY * 0.4; // how far inward the feet point
-
-//   const innerTop = { x: tailX + footLen, y: -footRise };
-//   const innerBot = { x: tailX + footLen, y: footRise };
-//   const rearTop = { x: tailX, y: -halfY };
-//   const rearBot = { x: tailX, y: halfY };
-
-//   ctx.beginPath();
-
-//   // sides
-//   ctx.moveTo(noseX, 0);
-//   ctx.lineTo(rearTop.x, rearTop.y);
-//   ctx.moveTo(noseX, 0);
-//   ctx.lineTo(rearBot.x, rearBot.y);
-
-//   // feet
-//   ctx.moveTo(rearTop.x, rearTop.y);
-//   ctx.lineTo(innerTop.x, innerTop.y);
-//   ctx.moveTo(rearBot.x, rearBot.y);
-//   ctx.lineTo(innerBot.x, innerBot.y);
-
-//   // base
-//   ctx.moveTo(innerTop.x, innerTop.y);
-//   ctx.lineTo(innerBot.x, innerBot.y);
-
-//   ctx.stroke();
-//   ctx.restore();
-// }
-
-function makeShipGeometry(size: number) {
-  const noseX = size,
-    tailX = -size * 0.6,
-    halfY = size * 0.5;
-  const footLen = size * 0.25,
-    footRise = halfY * 0.4,
-    innerX = tailX + footLen;
-
-  const verts = [
-    [noseX, 0], // 0 tip
-    [tailX, halfY], // 1 rearBot
-    [innerX, footRise], // 2 innerBot
-    [innerX, -footRise], // 3 innerTop
-    [tailX, -halfY], // 4 rearTop
-  ] as const;
-
-  const segs = [
-    [verts[0], verts[4]], // tip->rearTop
-    [verts[0], verts[1]], // tip->rearBot
-    [verts[4], verts[3]], // rearTop->innerTop
-    [verts[1], verts[2]], // rearBot->innerBot
-    [verts[3], verts[2]], // base
-  ] as const;
-
-  return { verts, segs };
+  for (const asteroid of state.asteroids) {
+    drawAsteroid(ctx, asteroid, asteroid.x * v, asteroid.y * v, v * 2 * asteroid.size);
+  }
 }
 
 function drawShip(ctx: Ctx, x: number, y: number, angle: number, size: number) {
@@ -106,7 +83,6 @@ function drawShip(ctx: Ctx, x: number, y: number, angle: number, size: number) {
   ctx.translate(x, y);
   ctx.rotate(angle);
   ctx.strokeStyle = 'white';
-  ctx.lineWidth = Math.max(0.03 * size, 1);
   ctx.lineJoin = 'miter';
   ctx.lineCap = 'round';
 
@@ -119,70 +95,14 @@ function drawShip(ctx: Ctx, x: number, y: number, angle: number, size: number) {
   ctx.restore();
 }
 
-function makeAsteroidGeometry(size: number) {
-  // Polar template: angles (deg) with radii multipliers. One shallow top notch and a right dent.
-  // const polar: ReadonlyArray<readonly [number, number]> = [
-  //   [-162, 0.92],
-  //   [-132, 0.78],
-  //   [-108, 0.86],
-  //   [-84, 0.97], // shoulder before top notch
-  //   [-58, 0.52], // deep top notch (inward)
-  //   [-34, 0.98], // sharp exit -> near right-angle turn
-  //   [6, 0.6], // right-side dent (inward)
-  //   [36, 0.85],
-  //   [96, 0.9],
-  //   [162, 0.88],
-  // ] as const;
-
-  // const polar: ReadonlyArray<readonly [number, number]> = [
-  //   [-170, 0.88],
-  //   [-145, 0.92],
-  //   [-122, 0.86],
-  //   [-100, 0.93], // softened
-  //   [-78, 0.88], // softened
-  //   [-58, 0.82], // gentle top indent
-  //   [-30, 0.94],
-  //   [10, 0.84],
-  //   [28, 0.62], // right indent
-  //   [60, 0.9],
-  //   [90, 0.94],
-  //   [120, 0.3], // bottom-left indent
-  // ] as const;
-
-  const polar: ReadonlyArray<readonly [number, number]> = [
-    [-165, 0.9],
-    [-140, 0.82],
-    [-118, 0.95],
-    [-86, 0.88],
-    [-55, 0.58], // top-right deep indent
-    [-20, 0.96],
-    [22, 0.88],
-    [75, 0.94],
-    [128, 0.92],
-    [185, 0.3], // bottom indent
-  ];
-
-  const toRad = (d: number) => (d * Math.PI) / 180;
-
-  const verts = polar.map(([deg, r]) => {
-    const a = toRad(deg);
-    return [Math.cos(a) * r * size, Math.sin(a) * r * size] as const;
-  });
-
-  const segs = verts.map((_, i) => [verts[i]!, verts[(i + 1) % verts.length]!] as const);
-
-  return { verts: verts, segs } as const;
-}
-
-function drawAsteroid(ctx: Ctx, x: number, y: number, angle: number, size: number) {
-  const { segs } = makeAsteroidGeometry(size);
+function drawAsteroid(ctx: Ctx, asteroid: Asteroid, x: number, y: number, size: number) {
+  const { segs } = makeAsteroidGeometry(size, asteroid.variant);
 
   ctx.save();
   ctx.translate(x, y);
-  ctx.rotate(angle);
+  ctx.rotate(asteroid.angle);
 
   ctx.strokeStyle = 'white'; // or a gray like '#a8a8a8'
-  ctx.lineWidth = Math.max(0.03 * size, 1);
   ctx.lineJoin = 'round';
   ctx.lineCap = 'round';
 
