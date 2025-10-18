@@ -70,6 +70,23 @@ const asteroidVariants = [
   ],
 ] as const;
 
+export function getAsteroidVariantMaxRadius(variant: number) {
+  const n = asteroidVariants.length;
+  const idx = ((variant % n) + n) % n;
+  let max = 0;
+  let i = 0;
+  for (const verts of asteroidVariants) {
+    if (i === idx) {
+      for (const [, r] of verts) {
+        if (r > max) max = r;
+      }
+      break;
+    }
+    i++;
+  }
+  return max;
+}
+
 export function makeAsteroidGeometry(size: number, variant: number) {
   const asteroid = asteroidVariants[variant % asteroidVariants.length]!;
 
