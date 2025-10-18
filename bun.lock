@@ -3,6 +3,9 @@
   "workspaces": {
     "": {
       "name": "asteroids",
+      "dependencies": {
+        "@spud.gg/api": "0.0.19",
+      },
       "devDependencies": {
         "@types/bun": "latest",
       },
@@ -12,6 +15,8 @@
     },
   },
   "packages": {
+    "@spud.gg/api": ["@spud.gg/api@0.0.19", "", {}, "sha512-wnbDFUlnBnYAUlFbMHYDSZew78eZkbjwh7iQGzawrM+OekEDmVPKV941+Loe1pn9x6F8F0mUueqyKErPmsdvxw=="],
+
     "@types/bun": ["@types/bun@1.3.0", "", { "dependencies": { "bun-types": "1.3.0" } }, "sha512-+lAGCYjXjip2qY375xX/scJeVRmZ5cY0wyHYyCYxNcdEXrQ4AOe3gACgd4iQ8ksOslJtW4VNxBJ8llUwc3a6AA=="],
 
     "@types/node": ["@types/node@24.8.1", "", { "dependencies": { "undici-types": "~7.14.0" } }, "sha512-alv65KGRadQVfVcG69MuB4IzdYVpRwMG/mq8KWOaoOdyY617P5ivaDiMCGOFDWD2sAn5Q0mR3mRtUOgm99hL9Q=="],

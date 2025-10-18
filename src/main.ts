@@ -1,18 +1,15 @@
-import { makeAsteroidGeometry, makeShipGeometry, getAsteroidVariantMaxRadius } from './shapes';
+import { gamepads } from '@spud.gg/api';
+import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
+import { wrapWithMargin } from './util';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-
-function wrapWithMargin(value: number, max: number, margin: number) {
-  const total = max + margin * 2;
-  return ((((value + margin) % total) + total) % total) - margin;
-}
 
 const state = {
   ship: {
     x: 50,
     y: 50,
-    dx: 0,
-    dy: 0,
+    dx: 0.2,
+    dy: 0.1,
     angle: 0,
     size: 3,
   },
@@ -66,8 +63,16 @@ function computeViewport(rect: DOMRect) {
 }
 
 function update(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number) {
-  state.ship.angle += 0.001 * dt;
-  state.ship.angle %= Math.PI * 2;
+  state.ship.x += state.ship.dx;
+  state.ship.y += state.ship.dy;
+  state.ship.x = wrapWithMargin(state.ship.x, worldWidthUnits, state.ship.size / 2);
+  state.ship.y = wrapWithMargin(state.ship.y, worldHeightUnits, state.ship.size / 2);
+
+  if (gamepads.singlePlayer.leftStick.magnitude > 0.75) {
+    state.ship.angle = gamepads.singlePlayer.leftStick.angle;
+    state.ship.dx += Math.cos(state.ship.angle) * dt * gamepads.singlePlayer.leftStick.magnitude * 0.001;
+    state.ship.dy += Math.sin(state.ship.angle) * dt * gamepads.singlePlayer.leftStick.magnitude * 0.001;
+  }
 
   state.asteroids.forEach((asteroid) => {
     asteroid.x += asteroid.dx * dt;
@@ -76,13 +81,13 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     asteroid.x = wrapWithMargin(asteroid.x, worldWidthUnits, asteroid.size);
     asteroid.y = wrapWithMargin(asteroid.y, worldHeightUnits, asteroid.size);
   });
+
+  gamepads.clearInputs();
 }
 
 function draw(state: State, ctx: Ctx, viewport: Viewport) {
-  const { rect, v } = viewport;
-
   {
-    ctx.lineWidth = Math.max(v / 4, 1);
+    ctx.lineWidth = Math.max(viewport.v / 4, 1);
     ctx.strokeStyle = 'white';
     ctx.lineJoin = 'miter';
     ctx.lineCap = 'round';
@@ -95,12 +100,13 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
   }
 }
 
-function drawShip(ctx: Ctx, ship: Ship, { v }: Viewport) {
-  const { segs } = makeShipGeometry(ship.size * v);
+type Point = readonly [number, number];
+type Segment = readonly [Point, Point];
 
+function drawShape(ctx: Ctx, segs: readonly Segment[], x: number, y: number, angle = 0) {
   ctx.save();
-  ctx.translate(ship.x * v, ship.y * v);
-  ctx.rotate(ship.angle);
+  ctx.translate(x, y);
+  ctx.rotate(angle);
 
   ctx.beginPath();
   for (const [[ax, ay], [bx, by]] of segs) {
@@ -111,22 +117,15 @@ function drawShip(ctx: Ctx, ship: Ship, { v }: Viewport) {
   ctx.restore();
 }
 
+function drawShip(ctx: Ctx, ship: Ship, { v }: Viewport) {
+  // todo: could store the segs and verts on state
+  const { segs } = makeShipGeometry(ship.size * v);
+  drawShape(ctx, segs, ship.x * v, ship.y * v, ship.angle);
+}
+
 function drawAsteroid(ctx: Ctx, asteroid: Asteroid, { v }: Viewport) {
-  // const rMax = getAsteroidVariantMaxRadius(asteroid.variant); // no longer in use.
-  const scale = asteroid.size * v; // / (rMax || 1);
-  const { segs } = makeAsteroidGeometry(scale, asteroid.variant);
-
-  ctx.save();
-  ctx.translate(asteroid.x * v, asteroid.y * v);
-  ctx.rotate(asteroid.angle);
-
-  ctx.beginPath();
-  for (const [[ax, ay], [bx, by]] of segs) {
-    ctx.moveTo(ax, ay);
-    ctx.lineTo(bx, by);
-  }
-  ctx.stroke();
-  ctx.restore();
+  const { segs } = makeAsteroidGeometry(asteroid.size * v, asteroid.variant);
+  drawShape(ctx, segs, asteroid.x * v, asteroid.y * v, asteroid.angle);
 }
 
 function main() {
