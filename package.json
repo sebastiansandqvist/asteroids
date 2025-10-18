@@ -1,0 +1,16 @@
+{
+  "name": "asteroids",
+  "private": true,
+  "scripts": {
+    "build": "bun build index.html --minify --outdir=dist --sourcemap=external",
+    "dev": "bun index.html --console --watch --port=3004",
+    "preview": "bunx serve dist",
+    "typecheck": "tsc"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5"
+  }
+}
