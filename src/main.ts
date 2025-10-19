@@ -265,7 +265,6 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
 }
 
 function draw(state: State, ctx: Ctx, viewport: Viewport) {
-  console.log(state.screenShakeAmount);
   {
     ctx.lineWidth = Math.max(viewport.v / 4, 1);
     ctx.strokeStyle = 'white';
@@ -400,6 +399,7 @@ window.addEventListener('click', () => {
 export function easeCameraToZero(state: State, dt: number) {
   const animationSpeed = 0.01;
   state.screenShakeAmount = lerp(state.screenShakeAmount, 0, 1 - Math.exp(-animationSpeed * dt));
+  if (state.screenShakeAmount < 0.001) state.screenShakeAmount = 0;
 }
 
 function lerp(start: number, end: number, t: number): number {
