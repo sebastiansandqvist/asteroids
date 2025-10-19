@@ -132,12 +132,12 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   const cy = rect.height / 2;
 
   const isGameOver = state.ship.lives === 0;
-  const title = isGameOver ? 'GAME OVER' : 'ASTEROIDS';
-  const button = isGameOver ? 'Replay (A)' : 'Start (A)';
   const scoreLine = `Score: ${state.ship.score}`;
+  const button = gamepads.playerCount === 0 ? 'Connect a gamepad' : isGameOver ? 'Replay (A)' : 'Start (A)';
 
-  const boxW = Math.min(rect.width * 0.8, 120 * v);
-  const boxH = isGameOver ? 48 * v : 40 * v;
+  // smaller box and padding
+  const boxW = Math.min(rect.width * 0.45, 56 * v);
+  const boxH = isGameOver ? 20 * v : 12 * v;
   const x = cx - boxW / 2;
   const y = cy - boxH / 2;
 
@@ -152,15 +152,18 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
-  ctx.font = `${12 * v}px Hyperspace`;
-  ctx.fillText(title, cx, y + 12 * v);
+  // unify text size to match score (8 * v) and consistent line spacing
+  ctx.font = `${8 * v}px Hyperspace`;
+  if (isGameOver) {
+    ctx.fillText('GAME OVER', cx, cy - 8 * v);
+  }
 
-  ctx.font = `${7 * v}px Hyperspace`;
+  ctx.font = `${8 * v}px Hyperspace`;
   ctx.fillText(button, cx, cy);
 
   if (isGameOver) {
-    ctx.font = `${6 * v}px Hyperspace`;
-    ctx.fillText(scoreLine, cx, y + boxH - 10 * v);
+    ctx.font = `${8 * v}px Hyperspace`;
+    ctx.fillText(scoreLine, cx, cy + 8 * v);
   }
 
   ctx.restore();
@@ -180,10 +183,20 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
     easeCameraToZero(state, dt);
 
-    if (gamepads.singlePlayer.isButtonDown(Button.South)) {
+    if (gamepads.singlePlayer.buttonJustPressed(Button.South)) {
       startNewGame(state, worldWidthUnits, worldHeightUnits);
     }
 
+    gamepads.clearInputs();
+    return;
+  }
+
+  // Level transition blackout: pause gameplay updates until next wave spawns
+  if (state.levelTransitionMs > 0) {
+    state.levelTransitionMs = Math.max(0, state.levelTransitionMs - dt);
+    if (state.levelTransitionMs === 0) {
+      nextLevel(state, worldWidthUnits, worldHeightUnits);
+    }
     gamepads.clearInputs();
     return;
   }
@@ -352,8 +365,8 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   );
 
   // Level clear -> seed next level
-  if (state.asteroids.length === 0) {
-    nextLevel(state, worldWidthUnits, worldHeightUnits);
+  if (state.asteroids.length === 0 && state.levelTransitionMs <= 0) {
+    state.levelTransitionMs = 2000;
   }
 
   // Player collision, respawn, and invincibility
@@ -472,6 +485,14 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     ctx.lineCap = 'round';
   }
 
+  // level transition blackout screen
+  if (state.levelTransitionMs > 0) {
+    ctx.save();
+    ctx.fillStyle = 'black';
+    ctx.fillRect(0, 0, viewport.rect.width, viewport.rect.height);
+    ctx.restore();
+    return;
+  }
   // draw ui before screenshake:
   if (state.mode === GameMode.Playing) {
     drawUi(state, ctx, viewport);

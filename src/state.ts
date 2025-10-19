@@ -6,11 +6,66 @@ export const Size = {
   Small: 2,
 } as const;
 
-export const state = {
-  mode: GameMode.Menu as GameMode,
+export type GameMode = (typeof GameMode)[keyof typeof GameMode];
+export type State = {
+  mode: GameMode;
+  level: number;
+  levelTransitionMs: number;
+  screenShakeAmount: number;
+  baseAsteroidSizes: number[];
+  ship: {
+    score: number;
+    lives: number;
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+    angle: number;
+    size: number;
+    isBoosting: boolean;
+    fireCooldownMs: number;
+    invincibleMs: number;
+    respawnMs: number;
+    bullets: {
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      ttlMs: number;
+    }[];
+  };
+  asteroids: {
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+    angle: number;
+    dangle: number;
+    variant: number;
+    size: number;
+    timeUntilDead?: number;
+  }[];
+  explosions: {
+    kind: 'spark';
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+    angle: number;
+    spin: number;
+    length: number;
+    lifeMs: number;
+    maxLifeMs: number;
+    easing: 'linear' | 'easeOutQuad';
+  }[];
+};
+
+export const state: State = {
+  mode: GameMode.Menu,
   level: 1,
+  levelTransitionMs: 0,
   screenShakeAmount: 0,
-  baseAsteroidSizes: [] as number[],
+  baseAsteroidSizes: [],
   ship: {
     score: 0,
     lives: 5,
@@ -24,13 +79,7 @@ export const state = {
     fireCooldownMs: 0,
     invincibleMs: 0,
     respawnMs: 0,
-    bullets: [] as {
-      x: number;
-      y: number;
-      dx: number;
-      dy: number;
-      ttlMs: number;
-    }[],
+    bullets: [],
   },
   asteroids: [
     { x: 20, y: 20, dx: 0.01, dy: 0.01, angle: 0, dangle: -0.001, variant: 0, size: Size.Big },
@@ -39,32 +88,9 @@ export const state = {
     { x: 90, y: 70, dx: -0.01, dy: 0.01, angle: 0, dangle: 0.002, variant: 1, size: Size.Big },
     { x: 90, y: 90, dx: -0.005, dy: -0.01, angle: 50, dangle: 0.0005, variant: 1, size: Size.Med },
     { x: 40, y: 90, dx: -0.002, dy: 0.004, angle: 50, dangle: 0.0005, variant: 3, size: Size.Small },
-  ] as {
-    x: number;
-    y: number;
-    dx: number;
-    dy: number;
-    angle: number;
-    dangle: number;
-    variant: number;
-    size: number;
-    timeUntilDead?: number;
-  }[],
-  explosions: [] as {
-    kind: 'spark';
-    x: number;
-    y: number;
-    dx: number;
-    dy: number;
-    angle: number;
-    spin: number;
-    length: number;
-    lifeMs: number;
-    maxLifeMs: number;
-    easing: 'linear' | 'easeOutQuad';
-  }[],
+  ],
+  explosions: [],
 };
 state.baseAsteroidSizes = state.asteroids.map((a) => a.size);
 
-export type GameMode = (typeof GameMode)[keyof typeof GameMode];
-export type State = typeof state;
+// types moved above

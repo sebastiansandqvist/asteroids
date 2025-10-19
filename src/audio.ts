@@ -2,6 +2,8 @@ import explosionWav from './sounds/explosion.wav';
 import explosionShipWav from './sounds/explosion-ship.wav';
 import explosionShipBassWav from './sounds/explosion-ship-bass.wav';
 import shootWav from './sounds/shoot.wav';
+import levelupWav from './sounds/levelup.wav';
+import gameoverWav from './sounds/gameover.wav';
 
 let cachedGlobalAudio: { audioContext: AudioContext; masterGain: GainNode; disconnect: () => void } | null = null;
 
@@ -37,19 +39,6 @@ function createAudio() {
   };
 }
 
-// const { audioContext, masterGain } = createAudio();
-
-// async function prepAudio(url: string) {
-//   const data = await fetch(url)
-//   const ab = await data.arrayBuffer();
-//   const audioBuffer = await audioContext.decodeAudioData(ab);
-//   const source = audioContext.createBufferSource();
-//   source.buffer = audioBuffer;
-//   source.connect(masterGain);
-// }
-
-// prepAudio(explosionShipWav);
-
 function createSounds<T extends Record<string, string>>(sources: T) {
   const { audioContext, masterGain, disconnect } = createAudio();
 
@@ -65,13 +54,9 @@ function createSounds<T extends Record<string, string>>(sources: T) {
     readonly src: string;
     play: (options?: { volume?: number; speed?: number; pitch?: number }) => void;
     cancel: () => void;
-    fadeOut: (options?: { duration?: number }) => Promise<void>;
-    connect: () => void;
     load: () => Promise<void>;
     disconnect: () => void;
   } => {
-    const connect = () => {};
-
     const load = async () => {
       if (soundCache[name]) return;
       const res = await fetch(src);
@@ -119,17 +104,11 @@ function createSounds<T extends Record<string, string>>(sources: T) {
       set.clear();
     };
 
-    const fadeOut = async () => {
-      // intentionally left minimal for v1
-    };
-
     return {
       src,
       load,
       play,
-      connect,
       cancel,
-      fadeOut,
       disconnect,
     };
   };
@@ -148,4 +127,6 @@ export const sounds = createSounds({
   kaboom: explosionShipWav,
   kaboomBass: explosionShipBassWav,
   shoot: shootWav,
+  gameover: gameoverWav,
+  levelup: levelupWav,
 });
