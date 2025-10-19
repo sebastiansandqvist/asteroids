@@ -150,8 +150,8 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
           color: player.color,
         });
       }
-      player.fireCooldownMs = 200;
-      sounds('shoot').play({ volume: 5 });
+      player.fireCooldownMs = 278 / 2;
+      sounds('shoot').play({ volume: 2 });
       pad.rumble(1, HapticIntensity.Light);
     }
 
@@ -356,7 +356,11 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
           const poly = transformPoints(verts, defender.angle, s.x, s.y);
           if (pointInPolygon([b.x, b.y], poly)) {
             attacker.score += scoreForShip(s.size);
-            const burst = spawnSparkBurst(s.x, s.y, { magnitude: s.size * 2.5, durationMs: explosionDurationMsShip });
+            const burst = spawnSparkBurst(s.x, s.y, {
+              magnitude: s.size * 2.5,
+              durationMs: explosionDurationMsShip,
+              color: defender.color,
+            });
             state.explosions = state.explosions.concat(burst);
             sounds('kaboom').play({ volume: 0.5 });
             sounds('kaboomBass').play({ volume: 1 });
@@ -383,7 +387,11 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
         const dy = wrapDelta(s.y - a.y, worldHeightUnits);
         const r = a.size + s.size;
         if (dx * dx + dy * dy <= r * r) {
-          const burst = spawnSparkBurst(s.x, s.y, { magnitude: s.size * 2.5, durationMs: explosionDurationMsShip });
+          const burst = spawnSparkBurst(s.x, s.y, {
+            magnitude: s.size * 2.5,
+            durationMs: explosionDurationMsShip,
+            color: p.color,
+          });
           state.explosions = state.explosions.concat(burst);
           sounds('kaboom').play({ volume: 0.5 });
           sounds('kaboomBass').play({ volume: 1 });
@@ -413,10 +421,12 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
             const burstA = spawnSparkBurst(sa.x, sa.y, {
               magnitude: sa.size * 2.5,
               durationMs: explosionDurationMsShip,
+              color: A.color,
             });
             const burstB = spawnSparkBurst(sb.x, sb.y, {
               magnitude: sb.size * 2.5,
               durationMs: explosionDurationMsShip,
+              color: B.color,
             });
             state.explosions = state.explosions.concat(burstA, burstB);
             sounds('kaboom').play({ volume: 0.5 });
@@ -718,7 +728,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     state.ship.fireCooldownMs = Math.max(0, state.ship.fireCooldownMs - dt);
 
     if (state.ship.respawnMs <= 0 && state.ship.fireCooldownMs <= 0 && isShooting()) {
-      state.ship.fireCooldownMs = 200;
+      state.ship.fireCooldownMs = 278 / 2;
       const bulletSpeed = (Math.min(worldWidthUnits, worldHeightUnits) * 1.5) / 1000; // half the playfield width per second
       state.ship.bullets.push({
         x: state.ship.x + Math.cos(state.ship.angle) * state.ship.size,
@@ -732,7 +742,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
         state.ship.bullets[0]!.ttlMs = 0;
       }
 
-      sounds('shoot').play({ volume: 5 });
+      sounds('shoot').play({ volume: 2 });
       gamepads.singlePlayer.rumble(1, HapticIntensity.Light);
     }
   }

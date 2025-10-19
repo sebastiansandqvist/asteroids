@@ -27,6 +27,7 @@ export type Spark = {
   readonly lifeMs: number; // remaining life
   readonly maxLifeMs: number; // original total life
   readonly easing: Easing; // fade easing for alpha over life
+  readonly color?: string; // optional CSS color for this spark
 };
 
 export type Explosion = Spark;
@@ -54,6 +55,9 @@ export type SparkBurstOptions = {
 
   // Easing controls alpha fade over lifetime
   readonly easing?: Easing;
+
+  // Optional color for the sparks (CSS color). If omitted, defaults to white when drawing.
+  readonly color?: string;
 };
 
 // easing is part of Spark; InternalSpark removed
@@ -75,14 +79,17 @@ function pickCountFromMagnitude(magnitude: number): number {
   return Math.max(8, Math.min(64, Math.floor(magnitude * 6)));
 }
 
-function defaultedOptions(options: SparkBurstOptions): Required<Omit<SparkBurstOptions, 'magnitude'>> {
+function defaultedOptions(
+  options: SparkBurstOptions,
+): Required<Omit<SparkBurstOptions, 'magnitude' | 'color'>> & { color?: string } {
   const durationMs = options.durationMs ?? 450;
   const count = options.count ?? pickCountFromMagnitude(options.magnitude);
   const speedRange = options.speedRange ?? ([0.01, 0.04] as const);
   const lengthRange = options.lengthRange ?? ([0.4, 1.6] as const);
   const spinRange = options.spinRange ?? ([-0.004, 0.004] as const);
   const easing = options.easing ?? 'easeOutQuad';
-  return { durationMs, count, speedRange, lengthRange, spinRange, easing };
+  const color = options.color;
+  return { durationMs, count, speedRange, lengthRange, spinRange, easing, color };
 }
 
 function makeSpark(
@@ -93,6 +100,7 @@ function makeSpark(
   lengthRange: readonly [number, number],
   spinRange: readonly [number, number],
   easing: Easing,
+  color: string | undefined,
 ): Spark {
   const angle = Math.random() * Math.PI * 2;
   const speed = randInRange(speedRange[0], speedRange[1]); // world units per ms
@@ -113,14 +121,15 @@ function makeSpark(
     lifeMs: maxLifeMs,
     maxLifeMs,
     easing,
+    color,
   };
 }
 
 export function spawnSparkBurst(x: number, y: number, options: SparkBurstOptions): Explosion[] {
-  const { durationMs, count, speedRange, lengthRange, spinRange, easing } = defaultedOptions(options);
+  const { durationMs, count, speedRange, lengthRange, spinRange, easing, color } = defaultedOptions(options);
   const sparks: Spark[] = [];
   for (let i = 0; i < count; i++) {
-    sparks.push(makeSpark(x, y, durationMs, speedRange, lengthRange, spinRange, easing));
+    sparks.push(makeSpark(x, y, durationMs, speedRange, lengthRange, spinRange, easing, color));
   }
   return sparks;
 }
@@ -164,6 +173,7 @@ export function drawExplosions(ctx: Ctx, explosions: readonly Explosion[], v: nu
 
     ctx.save();
     ctx.globalAlpha = alpha;
+    ctx.strokeStyle = e.color ?? 'white';
     ctx.beginPath();
     ctx.moveTo(e.x * v - dx, e.y * v - dy);
     ctx.lineTo(e.x * v + dx, e.y * v + dy);

@@ -179,7 +179,7 @@ void main() {
   vignette = mix(1.0 - u_vignetteStrength, 1.0, vignette);
   finalColor.rgb *= vignette;
 
-  gl_FragColor = finalColor;
+  gl_FragColor = vec4(finalColor.rgb, 1.0);
 }
 `;
 
@@ -525,7 +525,9 @@ export function drawWithShaders(
 
   // Step 1: Upload terminal content to original texture
   gl.bindTexture(gl.TEXTURE_2D, resources.originalTexture);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 1);
   gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, offscreenCanvasLocal);
+  gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, 0);
 
   // Step 2: Bright pass - extract bright pixels
   gl.bindFramebuffer(gl.FRAMEBUFFER, resources.brightFramebuffer);
@@ -615,7 +617,7 @@ export function drawWithShaders(
 
   gl.uniform1f(uniforms.combine.scanlineIntensity, scanlineConfig.intensity);
   gl.uniform1f(uniforms.combine.noiseIntensity, noiseConfig.intensity);
-  gl.uniform1f(uniforms.combine.noisePixelSize, devicePixelRatio * 3.0);
+  gl.uniform1f(uniforms.combine.noisePixelSize, devicePixelRatio * 2.0);
   gl.uniform1f(uniforms.combine.time, performance.now() * 0.001);
   gl.uniform2f(uniforms.combine.resolution, displayWidth, displayHeight);
   gl.uniform1f(uniforms.combine.vignetteStrength, curveConfig.vignetteStrength);
