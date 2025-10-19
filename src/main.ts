@@ -63,6 +63,8 @@ function startVersus(state: State, worldWidthUnits: number, worldHeightUnits: nu
   state.level = 1;
   state.levelTransitionMs = 0;
   state.screenShakeAmount = 0;
+  state.explosions = [];
+  seedLevel(state, state.level, worldWidthUnits, worldHeightUnits);
   state.players = [
     {
       color: Color.Blue,
@@ -275,6 +277,25 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
     state.levelTransitionMs = Math.max(0, state.levelTransitionMs - dt);
     if (state.levelTransitionMs === 0) {
       nextLevel(state, worldWidthUnits, worldHeightUnits);
+      // Reset both players to full health (single large ship) at level start
+      for (const p of state.players) {
+        p.angle = -Math.PI / 2;
+        p.isBoosting = false;
+        p.fireCooldownMs = 200;
+        const x = p.color === Color.Blue ? worldWidthUnits * 0.25 : worldWidthUnits * 0.75;
+        const y = worldHeightUnits * 0.5;
+        p.ships = [
+          {
+            x,
+            y,
+            dx: 0,
+            dy: 0,
+            size: ShipSize.Large,
+            invincibleMs: 1500,
+          },
+        ];
+        p.bullets = [];
+      }
     }
   }
 
@@ -518,6 +539,11 @@ function startNewGame(state: State, worldWidthUnits: number, worldHeightUnits: n
   state.mode = GameMode.Playing;
   state.level = 1;
 
+  // reset any Versus-specific state
+  state.players = [];
+  state.explosions = [];
+  state.screenShakeAmount = 0;
+
   state.ship.score = 0;
   state.ship.lives = 5;
   state.ship.x = worldWidthUnits / 2;
@@ -572,7 +598,7 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   if (hasBothPlayers) {
     const blueAlive = (state.players[0]?.ships.length ?? 0) > 0;
     const redAlive = (state.players[1]?.ships.length ?? 0) > 0;
-    const winnerText = blueAlive !== redAlive ? (blueAlive ? 'Blue wins!' : 'Red wins!') : null;
+    const winnerText = blueAlive !== redAlive ? (blueAlive ? 'Blue wins' : 'Red wins') : null;
     lines = winnerText ? [winnerText, actionLabel] : [actionLabel];
   } else {
     lines = isGameOver ? [scoreLine, actionLabel] : [actionLabel];
