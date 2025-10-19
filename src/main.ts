@@ -1,7 +1,7 @@
 import { Button, gamepads, HapticIntensity } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
-import { wrapWithMargin } from './util';
-import { state, type State } from './state';
+import { randomIntInRange, wrapDelta, wrapWithMargin } from './util';
+import { Size, state, type State } from './state';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -9,7 +9,7 @@ type Asteroid = State['asteroids'][number];
 type Ship = State['ship'];
 type Bullet = State['ship']['bullets'][number];
 
-const maxActiveBullets = 50;
+const maxActiveBullets = 5;
 
 type Viewport = ReturnType<typeof computeViewport>;
 
@@ -34,8 +34,8 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   state.ship.isBoosting = gamepads.singlePlayer.leftStick.magnitude > 0.75;
   if (state.ship.isBoosting) {
     state.ship.angle = gamepads.singlePlayer.leftStick.angle;
-    state.ship.dx += Math.cos(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.001 * dt;
-    state.ship.dy += Math.sin(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.001 * dt;
+    state.ship.dx += Math.cos(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
+    state.ship.dy += Math.sin(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
   }
 
   {
@@ -43,7 +43,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
 
     if (state.ship.fireCooldownMs <= 0 && isShooting()) {
       state.ship.fireCooldownMs = 200;
-      const bulletSpeed = worldWidthUnits / 2 / 1000; // half the playfield width per second
+      const bulletSpeed = Math.min(worldWidthUnits, worldHeightUnits) / 2 / 1000; // half the playfield width per second
       state.ship.bullets.push({
         x: state.ship.x + Math.cos(state.ship.angle) * state.ship.size,
         y: state.ship.y + Math.sin(state.ship.angle) * state.ship.size,
@@ -76,6 +76,90 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     asteroid.x = wrapWithMargin(asteroid.x, worldWidthUnits, asteroid.size);
     asteroid.y = wrapWithMargin(asteroid.y, worldHeightUnits, asteroid.size);
   });
+
+  const explosionTtlMs = 0;
+  // const explosionTtlMs = 300;
+  const childSpeedMin = 0.01;
+  const childSpeedMax = 0.03;
+  const spawnJitter = 0.25;
+  const childDangleMax = 0.005;
+  const bulletRadiusWorld = 0.5;
+
+  function bulletHitsAsteroidRadius(bullet: Bullet, asteroid: Asteroid): boolean {
+    const dx = wrapDelta(bullet.x - asteroid.x, worldWidthUnits);
+    const dy = wrapDelta(bullet.y - asteroid.y, worldHeightUnits);
+    const radiusSum = asteroid.size + bulletRadiusWorld;
+    return dx * dx + dy * dy <= radiusSum * radiusSum;
+  }
+
+  function splitAsteroid(asteroid: Asteroid): Asteroid[] {
+    const childSize = asteroid.size === Size.Big ? Size.Med : asteroid.size === Size.Med ? Size.Small : 0;
+    if (childSize === 0) return [];
+    return [true, true].map(() => {
+      const direction = Math.random() * Math.PI * 2;
+      const speed = childSpeedMin + Math.random() * (childSpeedMax - childSpeedMin);
+      const jitterX = (Math.random() * 2 - 1) * spawnJitter;
+      const jitterY = (Math.random() * 2 - 1) * spawnJitter;
+      return {
+        x: wrapWithMargin(asteroid.x + jitterX, worldWidthUnits, childSize),
+        y: wrapWithMargin(asteroid.y + jitterY, worldHeightUnits, childSize),
+        dx: Math.cos(direction) * speed,
+        dy: Math.sin(direction) * speed,
+        angle: Math.random() * Math.PI * 2,
+        dangle: (Math.random() * 2 - 1) * childDangleMax,
+        variant: randomIntInRange(0, 2),
+        size: childSize,
+      };
+    });
+  }
+
+  // Decay dying asteroids
+  for (const asteroid of state.asteroids) {
+    if (asteroid.timeUntilDead !== undefined) {
+      asteroid.timeUntilDead -= dt;
+    }
+  }
+
+  // Bullet–asteroid collisions (point-in-radius)
+  const bulletsToRemove = new Set<number>();
+  const asteroidsToRemove = new Set<number>();
+  const childrenToAdd: Asteroid[] = [];
+
+  for (const [bulletIndex, bullet] of state.ship.bullets.entries()) {
+    for (const [asteroidIndex, asteroid] of state.asteroids.entries()) {
+      if (asteroid.timeUntilDead !== undefined) continue;
+      if (bulletHitsAsteroidRadius(bullet, asteroid)) {
+        gamepads.singlePlayer.rumble(
+          asteroid.size === Size.Big ? 50 : 30,
+          asteroid.size === Size.Small ? HapticIntensity.Balanced : HapticIntensity.Heavy,
+        );
+        bulletsToRemove.add(bulletIndex);
+        if (asteroid.size === Size.Big || asteroid.size === Size.Med) {
+          asteroidsToRemove.add(asteroidIndex);
+          const children = splitAsteroid(asteroid);
+          for (const child of children) {
+            childrenToAdd.push(child);
+          }
+        } else {
+          asteroid.timeUntilDead = explosionTtlMs;
+        }
+        break; // a bullet hits at most one asteroid
+      }
+    }
+  }
+
+  // Rebuild bullets
+  state.ship.bullets = state.ship.bullets.filter((_, index) => !bulletsToRemove.has(index));
+
+  // Rebuild asteroids and append children
+  state.asteroids = state.asteroids
+    .filter((asteroid, index) => asteroid.timeUntilDead !== undefined || !asteroidsToRemove.has(index))
+    .concat(childrenToAdd);
+
+  // Cull asteroids whose death timer has elapsed
+  state.asteroids = state.asteroids.filter(
+    (asteroid) => asteroid.timeUntilDead === undefined || asteroid.timeUntilDead > 0,
+  );
 
   gamepads.clearInputs();
 }
