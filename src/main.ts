@@ -1,7 +1,7 @@
 import { Button, gamepads, HapticIntensity } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
 import { lerp, randomBetween, randomIntInRange, wrapDelta, wrapWithMargin } from './util';
-import { GameMode, Size, state, type State } from './state';
+import { GameMode, Size, state, type State, Color, ShipSize } from './state';
 import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
 
@@ -28,6 +28,375 @@ const explosionDurationMsAsteroid = 400;
 const explosionDurationMsShip = 600;
 
 type Viewport = ReturnType<typeof computeViewport>;
+
+// Multiplayer types inferred from state
+type Player = State['players'][number];
+type MpShip = Player['ships'][number];
+type MpBullet = Player['bullets'][number];
+
+// Geometry helpers (world-space)
+function transformPoints(
+  points: ReadonlyArray<readonly [number, number]>,
+  angle: number,
+  tx: number,
+  ty: number,
+): ReadonlyArray<readonly [number, number]> {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  return points.map(([x, y]) => [tx + (x * c - y * s), ty + (x * s + y * c)] as const);
+}
+
+function pointInPolygon(p: readonly [number, number], poly: ReadonlyArray<readonly [number, number]>): boolean {
+  let inside = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]!;
+    const [xj, yj] = poly[j]!;
+    const intersect = yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+// Versus: initialize two players
+function startVersus(state: State, worldWidthUnits: number, worldHeightUnits: number): void {
+  state.mode = GameMode.Versus;
+  state.level = 1;
+  state.levelTransitionMs = 0;
+  state.screenShakeAmount = 0;
+  state.players = [
+    {
+      color: Color.Blue,
+      score: 0,
+      angle: -Math.PI / 2,
+      isBoosting: false,
+      fireCooldownMs: 0,
+      ships: [
+        {
+          x: worldWidthUnits * 0.25,
+          y: worldHeightUnits * 0.5,
+          dx: 0,
+          dy: 0,
+          size: ShipSize.Large,
+          invincibleMs: 1200,
+        },
+      ],
+      bullets: [],
+    },
+    {
+      color: Color.Red,
+      score: 0,
+      angle: -Math.PI / 2,
+      isBoosting: false,
+      fireCooldownMs: 0,
+      ships: [
+        {
+          x: worldWidthUnits * 0.75,
+          y: worldHeightUnits * 0.5,
+          dx: 0,
+          dy: 0,
+          size: ShipSize.Large,
+          invincibleMs: 1200,
+        },
+      ],
+      bullets: [],
+    },
+  ];
+}
+
+// Versus game loop
+function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number): void {
+  // Move asteroids
+  state.asteroids.forEach((asteroid) => {
+    asteroid.x += asteroid.dx * dt;
+    asteroid.y += asteroid.dy * dt;
+    asteroid.angle += asteroid.dangle * dt;
+    asteroid.x = wrapWithMargin(asteroid.x, worldWidthUnits, asteroid.size);
+    asteroid.y = wrapWithMargin(asteroid.y, worldHeightUnits, asteroid.size);
+  });
+
+  // Explosions + camera
+  state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
+  easeCameraToZero(state, dt);
+
+  // Input helpers
+  const padIsShooting = (p: typeof gamepads.p1) => p.isButtonDown(Button.South) || p.isButtonDown(Button.RightTrigger);
+
+  // Physics + input per player (match SP feel)
+  state.players.forEach((player) => {
+    const pad = player.color === Color.Blue ? gamepads.p1 : gamepads.p2;
+
+    // Boosting + angle like SP
+    player.isBoosting = pad.leftStick.magnitude > 0.75;
+    if (player.isBoosting) {
+      player.angle = pad.leftStick.angle;
+    }
+
+    // Fire (hold-to-fire) with per-player cooldown
+    player.fireCooldownMs = Math.max(0, player.fireCooldownMs - dt);
+    if (player.ships.length > 0 && player.fireCooldownMs <= 0 && padIsShooting(pad)) {
+      const bulletSpeed = (Math.min(worldWidthUnits, worldHeightUnits) * 1.5) / 1000;
+      const dirx = Math.cos(player.angle);
+      const diry = Math.sin(player.angle);
+      for (const s of player.ships) {
+        player.bullets.push({
+          x: s.x + dirx * s.size,
+          y: s.y + diry * s.size,
+          dx: dirx * bulletSpeed + s.dx / dt,
+          dy: diry * bulletSpeed + s.dy / dt,
+          ttlMs: 500,
+          color: player.color,
+        });
+      }
+      player.fireCooldownMs = 200;
+      sounds('shoot').play({ volume: 5 });
+      pad.rumble(1, HapticIntensity.Light);
+    }
+
+    // Movement (match SP accel constant)
+    if (player.isBoosting) {
+      const accel = 0.0005 * pad.leftStick.magnitude * dt;
+      const ax = Math.cos(player.angle) * accel;
+      const ay = Math.sin(player.angle) * accel;
+      for (const s of player.ships) {
+        s.dx += ax;
+        s.dy += ay;
+      }
+    }
+
+    // Integrate + wrap + invincibility
+    for (const s of player.ships) {
+      s.x = wrapWithMargin(s.x + s.dx, worldWidthUnits, s.size / 2);
+      s.y = wrapWithMargin(s.y + s.dy, worldHeightUnits, s.size / 2);
+      if (s.invincibleMs > 0) s.invincibleMs = Math.max(0, s.invincibleMs - dt);
+    }
+
+    // Bullets update
+    player.bullets = player.bullets
+      .map((b) => ({
+        ...b,
+        x: wrapWithMargin(b.x + b.dx * dt, worldWidthUnits, 0),
+        y: wrapWithMargin(b.y + b.dy * dt, worldHeightUnits, 0),
+        ttlMs: b.ttlMs - dt,
+      }))
+      .filter((b) => b.ttlMs > 0);
+  });
+
+  // Shared constants (mirror SP)
+  const explosionTtlMs = 0;
+  const childSpeedMin = 0.01;
+  const childSpeedMax = 0.03;
+  const spawnJitter = 0.25;
+  const childDangleMax = 0.005;
+  const bulletRadiusWorld = 0.5;
+
+  const scoreForAsteroid = (s: number) => (s === Size.Big ? 20 : s === Size.Med ? 50 : 100);
+  const scoreForShip = (sz: number) => (sz === ShipSize.Large ? 40 : sz === ShipSize.Med ? 100 : 200);
+
+  const bulletHitsAsteroidRadius = (b: { x: number; y: number }, a: Asteroid) => {
+    const dx = wrapDelta(b.x - a.x, worldWidthUnits);
+    const dy = wrapDelta(b.y - a.y, worldHeightUnits);
+    const r = a.size + bulletRadiusWorld;
+    return dx * dx + dy * dy <= r * r;
+  };
+
+  const splitAsteroidLocal = (asteroid: Asteroid): Asteroid[] => {
+    const childSize = asteroid.size === Size.Big ? Size.Med : asteroid.size === Size.Med ? Size.Small : 0;
+    if (childSize === 0) return [];
+    return [true, true].map(() => {
+      const direction = Math.random() * Math.PI * 2;
+      const speed = childSpeedMin + Math.random() * (childSpeedMax - childSpeedMin);
+      const jitterX = (Math.random() * 2 - 1) * spawnJitter;
+      const jitterY = (Math.random() * 2 - 1) * spawnJitter;
+      return {
+        x: wrapWithMargin(asteroid.x + jitterX, worldWidthUnits, childSize),
+        y: wrapWithMargin(asteroid.y + jitterY, worldHeightUnits, childSize),
+        dx: Math.cos(direction) * speed,
+        dy: Math.sin(direction) * speed,
+        angle: Math.random() * Math.PI * 2,
+        dangle: (Math.random() * 2 - 1) * childDangleMax,
+        variant: randomIntInRange(0, 2),
+        size: childSize,
+      };
+    });
+  };
+
+  // Bullet–asteroid collisions (with splitting like SP)
+  const asteroidsToRemove = new Set<number>();
+  const childrenToAdd: Asteroid[] = [];
+  state.players.forEach((p) => {
+    const survivors: MpBullet[] = [];
+    p.bullets.forEach((b) => {
+      let hitIdx: number | null = null;
+      for (let i = 0; i < state.asteroids.length; i++) {
+        const a = state.asteroids[i]!;
+        if (a.timeUntilDead !== undefined) continue;
+        if (bulletHitsAsteroidRadius(b, a)) {
+          hitIdx = i;
+          break;
+        }
+      }
+      if (hitIdx !== null) {
+        const a = state.asteroids[hitIdx]!;
+        p.score += scoreForAsteroid(a.size);
+        p.color === Color.Blue
+          ? gamepads.p1.rumble(50, HapticIntensity.Heavy)
+          : gamepads.p2.rumble(50, HapticIntensity.Heavy);
+        const burst = spawnSparkBurst(a.x, a.y, { magnitude: a.size, durationMs: explosionDurationMsAsteroid });
+        state.explosions = state.explosions.concat(burst);
+        const soundSpeed = { [Size.Big]: 1, [Size.Med]: 2, [Size.Small]: 3 }[a.size] ?? 1;
+        sounds('explode').play({ volume: 1 / soundSpeed, speed: soundSpeed });
+        state.screenShakeAmount = 1 / (20 - a.size * 2);
+        if (a.size === Size.Big || a.size === Size.Med) {
+          asteroidsToRemove.add(hitIdx);
+          const kids = splitAsteroidLocal(a);
+          for (const k of kids) childrenToAdd.push(k);
+        } else {
+          a.timeUntilDead = explosionTtlMs;
+        }
+      } else {
+        survivors.push(b);
+      }
+    });
+    p.bullets = survivors;
+  });
+
+  // Rebuild asteroids and cull expired
+  state.asteroids = state.asteroids
+    .filter((a, i) => a.timeUntilDead !== undefined || !asteroidsToRemove.has(i))
+    .concat(childrenToAdd)
+    .filter((a) => a.timeUntilDead === undefined || a.timeUntilDead > 0);
+
+  // Ship splitting helper (non-overlapping)
+  function splitShipFragment(player: Player, index: number): void {
+    const s = player.ships[index]!;
+    const next = s.size === ShipSize.Large ? ShipSize.Med : s.size === ShipSize.Med ? ShipSize.Small : null;
+    if (next === null) {
+      player.ships.splice(index, 1);
+      return;
+    }
+    const attempts = 24;
+    const radius = (size: number) => size;
+    const minR = radius(next) * 2;
+    const maxR = minR * 2;
+
+    const base = s;
+    const tryPlace = (existing: ReadonlyArray<MpShip>): MpShip | null => {
+      for (let i = 0; i < attempts; i++) {
+        const r = minR + Math.random() * (maxR - minR);
+        const theta = Math.random() * Math.PI * 2;
+        const x = base.x + Math.cos(theta) * r;
+        const y = base.y + Math.sin(theta) * r;
+        const overlaps = existing.some((e) => {
+          const dx = x - e.x;
+          const dy = y - e.y;
+          const rr = radius(next) + radius(e.size);
+          return dx * dx + dy * dy < rr * rr;
+        });
+        if (!overlaps) return { x, y, dx: base.dx, dy: base.dy, size: next, invincibleMs: 500 };
+      }
+      return null;
+    };
+
+    const pool = player.ships.slice(0, index).concat(player.ships.slice(index + 1));
+    const a = tryPlace(pool);
+    if (a) {
+      const b = tryPlace(pool.concat([a]));
+      if (b) {
+        player.ships.splice(index, 1, a, b);
+        return;
+      }
+    }
+    player.ships.splice(index, 1);
+  }
+
+  // Bullets vs ships (point-in-polygon), friendly fire by different player only
+  state.players.forEach((attacker, ai) => {
+    const others = state.players.filter((_, i) => i !== ai);
+    const survivors: MpBullet[] = [];
+    attacker.bullets.forEach((b) => {
+      let hit = false;
+      for (const defender of others) {
+        for (let si = 0; si < defender.ships.length; si++) {
+          const s = defender.ships[si]!;
+          if (s.invincibleMs > 0) continue;
+          const { verts } = makeShipGeometry(s.size);
+          const poly = transformPoints(verts, defender.angle, s.x, s.y);
+          if (pointInPolygon([b.x, b.y], poly)) {
+            attacker.score += scoreForShip(s.size);
+            const burst = spawnSparkBurst(s.x, s.y, { magnitude: s.size * 2.5, durationMs: explosionDurationMsShip });
+            state.explosions = state.explosions.concat(burst);
+            sounds('kaboom').play({ volume: 0.5 });
+            sounds('kaboomBass').play({ volume: 1 });
+            state.screenShakeAmount = 1;
+            splitShipFragment(defender, si);
+            hit = true;
+            break;
+          }
+        }
+        if (hit) break;
+      }
+      if (!hit) survivors.push(b);
+    });
+    attacker.bullets = survivors;
+  });
+
+  // Asteroids vs ships
+  state.players.forEach((p) => {
+    for (let si = 0; si < p.ships.length; si++) {
+      const s = p.ships[si]!;
+      if (s.invincibleMs > 0) continue;
+      for (const a of state.asteroids) {
+        const dx = wrapDelta(s.x - a.x, worldWidthUnits);
+        const dy = wrapDelta(s.y - a.y, worldHeightUnits);
+        const r = a.size + s.size;
+        if (dx * dx + dy * dy <= r * r) {
+          const burst = spawnSparkBurst(s.x, s.y, { magnitude: s.size * 2.5, durationMs: explosionDurationMsShip });
+          state.explosions = state.explosions.concat(burst);
+          sounds('kaboom').play({ volume: 0.5 });
+          sounds('kaboomBass').play({ volume: 1 });
+          state.screenShakeAmount = 1;
+          splitShipFragment(p, si);
+          si--;
+          break;
+        }
+      }
+    }
+  });
+
+  // End condition -> back to Menu (overlay will show both scores)
+  const alivePlayers = state.players.filter((p) => p.ships.length > 0).length;
+  if (alivePlayers <= 1) {
+    state.mode = GameMode.Menu;
+  }
+}
+
+// Versus rendering
+function drawPlayersAndBullets(ctx: Ctx, viewport: Viewport) {
+  const v = viewport.v;
+  ctx.save();
+  for (const p of state.players) {
+    ctx.save();
+    ctx.strokeStyle = p.color;
+    ctx.fillStyle = p.color;
+
+    // ships (with flicker on invincible)
+    for (const s of p.ships) {
+      if (s.invincibleMs > 0 && Math.floor(s.invincibleMs / 100) % 2 === 0) continue;
+      const { segs } = makeShipGeometry(s.size * v, p.isBoosting);
+      drawShape(ctx, segs as unknown as readonly Segment[], s.x * v, s.y * v, p.angle);
+    }
+
+    // bullets
+    const radius = Math.max(1, ctx.lineWidth);
+    for (const b of p.bullets) {
+      ctx.beginPath();
+      ctx.ellipse(b.x * v, b.y * v, radius, radius, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
 
 function randomAsteroidOutsideCenter(
   size: number,
@@ -133,13 +502,25 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
 
   const isGameOver = state.ship.lives === 0;
   const scoreLine = `Score ${state.ship.score}`;
-  const button = gamepads.playerCount === 0 ? 'Connect a gamepad' : isGameOver ? 'Replay (A)' : 'Start (A)';
+  const actionLabel =
+    gamepads.playerCount === 0
+      ? 'Connect a gamepad'
+      : isGameOver
+        ? 'Replay (A)'
+        : gamepads.playerCount >= 2
+          ? 'VERSUS (A)'
+          : 'Start (A)';
 
   ctx.save();
 
   // text metrics first (all overlay text uses the score size)
   ctx.font = `${8 * v}px Hyperspace`;
-  const lines = isGameOver ? [scoreLine, button] : [button];
+  const hasBothPlayers = state.players.length >= 2;
+  const lines = hasBothPlayers
+    ? ([`Blue ${state.players[0]?.score ?? 0}`, `Red ${state.players[1]?.score ?? 0}`, actionLabel] as const)
+    : isGameOver
+      ? [scoreLine, actionLabel]
+      : [actionLabel];
 
   // compute per-line metrics and overall block dimensions
   const measures = lines.map((t) => ctx.measureText(t));
@@ -180,6 +561,12 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
 }
 
 function update(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number) {
+  // Versus mode update
+  if ((state.mode as GameMode) === GameMode.Versus) {
+    updateVersus(state, dt, worldWidthUnits, worldHeightUnits);
+    gamepads.clearInputs();
+    return;
+  }
   // Menu mode: update background asteroids/explosions and wait for Start/Replay (A)
   if (state.mode !== GameMode.Playing) {
     state.asteroids.forEach((asteroid) => {
@@ -193,7 +580,9 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
     easeCameraToZero(state, dt);
 
-    if (gamepads.playerCount > 0 && gamepads.singlePlayer.buttonJustPressed(Button.South)) {
+    if (gamepads.playerCount >= 2 && gamepads.anyPlayer.buttonJustPressed(Button.South)) {
+      startVersus(state, worldWidthUnits, worldHeightUnits);
+    } else if (gamepads.playerCount > 0 && gamepads.singlePlayer.buttonJustPressed(Button.South)) {
       startNewGame(state, worldWidthUnits, worldHeightUnits);
     }
 
@@ -459,6 +848,27 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
 
 function drawUi(state: State, ctx: Ctx, viewport: Viewport) {
   const { v } = viewport;
+
+  // Versus UI: Blue left, Red right; no lives
+  if ((state.mode as GameMode) === GameMode.Versus) {
+    ctx.save();
+    ctx.font = `${8 * v}px Hyperspace`;
+    ctx.textBaseline = 'top';
+
+    // Blue score (left)
+    ctx.fillStyle = Color.Blue;
+    ctx.textAlign = 'left';
+    ctx.fillText(`${state.players[0]?.score ?? 0}`, 10, 10);
+
+    // Red score (right)
+    ctx.fillStyle = Color.Red;
+    ctx.textAlign = 'right';
+    ctx.fillText(`${state.players[1]?.score ?? 0}`, viewport.rect.width - 10, 10);
+
+    ctx.restore();
+    return;
+  }
+
   const margin = 4 * v; // margin from top and left
 
   // lives
@@ -515,7 +925,7 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     return;
   }
   // draw ui before screenshake:
-  if (state.mode === GameMode.Playing) {
+  if (state.mode === GameMode.Playing || (state.mode as GameMode) === GameMode.Versus) {
     drawUi(state, ctx, viewport);
   }
 
@@ -534,8 +944,12 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
   if (state.mode === GameMode.Playing) {
     drawShip(ctx, state.ship, viewport);
     drawBullets(ctx, state.ship.bullets, viewport);
+  } else if ((state.mode as GameMode) === GameMode.Versus) {
+    drawPlayersAndBullets(ctx, viewport);
   }
 
+  ctx.strokeStyle = 'white';
+  ctx.fillStyle = 'white';
   for (const asteroid of state.asteroids) {
     drawAsteroid(ctx, asteroid, viewport);
   }

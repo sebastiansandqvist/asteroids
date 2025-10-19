@@ -1,7 +1,18 @@
-export const GameMode = { Menu: 'Menu', Playing: 'Playing' } as const;
+export const GameMode = { Menu: 'Menu', Playing: 'Playing', Versus: 'Versus' } as const;
 
 export const Size = {
   Big: 7,
+  Med: 4,
+  Small: 2,
+} as const;
+
+export const Color = {
+  Blue: 'oklch(74.6% 0.16 232.661)',
+  Red: 'oklch(63.7% 0.237 25.331)',
+} as const;
+
+export const ShipSize = {
+  Large: 6,
   Med: 4,
   Small: 2,
 } as const;
@@ -35,6 +46,29 @@ export const state = {
       ttlMs: number;
     }[],
   },
+  players: [] as {
+    color: (typeof Color)[keyof typeof Color];
+    score: number;
+    angle: number;
+    isBoosting: boolean;
+    fireCooldownMs: number;
+    ships: {
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      size: (typeof ShipSize)[keyof typeof ShipSize];
+      invincibleMs: number;
+    }[];
+    bullets: {
+      x: number;
+      y: number;
+      dx: number;
+      dy: number;
+      ttlMs: number;
+      color: (typeof Color)[keyof typeof Color];
+    }[];
+  }[],
   asteroids: [
     { x: 20, y: 20, dx: 0.01, dy: 0.01, angle: 0, dangle: -0.001, variant: 0, size: Size.Big },
     { x: 50, y: 20, dx: 0.01, dy: -0.01, angle: 0, dangle: 0.003, variant: 2, size: Size.Big },
