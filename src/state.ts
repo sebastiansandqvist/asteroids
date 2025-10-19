@@ -7,6 +7,8 @@ export const Size = {
 export const state = {
   screenShakeAmount: 0,
   ship: {
+    score: 0,
+    lives: 5,
     x: 50,
     y: 50,
     dx: 0.2,

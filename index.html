@@ -3,19 +3,33 @@
   <head>
     <title>asteroids</title>
     <style>
+      @font-face {
+        font-family: 'Hyperspace';
+        font-display: block;
+        src: url('./src/fonts/hyperspace.ttf') format('truetype');
+      }
+
       body {
+        font-family: 'Hyperspace', monospace;
         background: black;
         margin: 0;
       }
+
       canvas {
         position: fixed;
         inset: 0;
         height: 100vh;
         width: 100vw;
       }
+
+      h1 {
+        opacity: 0;
+        pointer-events: none;
+      }
     </style>
   </head>
   <body>
+    <h1>asteroids!</h1>
     <audio src="./src/sounds/moonlight-sonata.mp3" />
     <script type="module" src="./src/main.ts"></script>
   </body>

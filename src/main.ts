@@ -1,11 +1,9 @@
 import { Button, gamepads, HapticIntensity } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
-import { randomIntInRange, wrapDelta, wrapWithMargin } from './util';
+import { lerp, randomIntInRange, wrapDelta, wrapWithMargin } from './util';
 import { Size, state, type State } from './state';
 import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
-
-// todo: screen shake
 
 function computeViewport(rect: DOMRect) {
   const vw = rect.width / 100;
@@ -148,6 +146,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     for (const [asteroidIndex, asteroid] of state.asteroids.entries()) {
       if (asteroid.timeUntilDead !== undefined) continue;
       if (bulletHitsAsteroidRadius(bullet, asteroid)) {
+        state.ship.score += asteroid.size * 10;
         gamepads.singlePlayer.rumble(
           asteroid.size === Size.Big ? 80 : 50,
           asteroid.size === Size.Small ? HapticIntensity.Balanced : HapticIntensity.Heavy,
@@ -242,6 +241,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
           state.ship.invincibleMs = 0;
           state.ship.dx = 0;
           state.ship.dy = 0;
+          state.ship.lives = Math.max(0, state.ship.lives - 1);
           {
             const burst = spawnSparkBurst(state.ship.x, state.ship.y, {
               magnitude: state.ship.size * 2.5,
@@ -264,6 +264,37 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   gamepads.clearInputs();
 }
 
+function drawUi(state: State, ctx: Ctx, viewport: Viewport) {
+  const { v } = viewport;
+  const margin = 4 * v; // margin from top and left
+
+  // lives
+  const totalLives = 5;
+  const gap = 1.5 * v; // gap between lives icons
+
+  const uiShipSizeUnits = state.ship.size;
+  const shipPx = uiShipSizeUnits * v;
+  const topY = margin + shipPx;
+  const startX = margin + shipPx / 2;
+
+  const { segs } = makeShipGeometry(shipPx);
+
+  ctx.save();
+  for (let i = 0; i < totalLives; i++) {
+    // Full opacity for remaining lives, 50% for lost lives
+    ctx.globalAlpha = i < state.ship.lives ? 1 : 0.5;
+    const cx = startX + i * (shipPx + gap);
+    drawShape(ctx, segs, cx, topY, -Math.PI / 2);
+  }
+  ctx.restore();
+
+  // score
+  ctx.font = `${8 * v}px Hyperspace`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(`${state.ship.score}`, startX + totalLives * (shipPx + gap) + 2 * v, margin);
+}
+
 function draw(state: State, ctx: Ctx, viewport: Viewport) {
   {
     ctx.lineWidth = Math.max(viewport.v / 4, 1);
@@ -273,14 +304,20 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     ctx.lineCap = 'round';
   }
 
+  // draw ui before screenshake:
+  drawUi(state, ctx, viewport);
+
   ctx.save();
 
-  const shakeStrength = 5;
-  const wobbleSpeed = 0.2;
-  ctx.translate(
-    Math.sin(performance.now() * wobbleSpeed) * state.screenShakeAmount * viewport.v * shakeStrength,
-    Math.sin(performance.now() * 1.5 * wobbleSpeed) * state.screenShakeAmount * viewport.v * shakeStrength,
-  );
+  // shake
+  {
+    const shakeStrength = 5;
+    const wobbleSpeed = 0.2;
+    ctx.translate(
+      Math.sin(performance.now() * wobbleSpeed) * state.screenShakeAmount * viewport.v * shakeStrength,
+      Math.sin(performance.now() * 1.5 * wobbleSpeed) * state.screenShakeAmount * viewport.v * shakeStrength,
+    );
+  }
 
   drawShip(ctx, state.ship, viewport);
   drawBullets(ctx, state.ship.bullets, viewport);
@@ -400,8 +437,4 @@ export function easeCameraToZero(state: State, dt: number) {
   const animationSpeed = 0.01;
   state.screenShakeAmount = lerp(state.screenShakeAmount, 0, 1 - Math.exp(-animationSpeed * dt));
   if (state.screenShakeAmount < 0.001) state.screenShakeAmount = 0;
-}
-
-function lerp(start: number, end: number, t: number): number {
-  return start + (end - start) * t;
 }

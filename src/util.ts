@@ -28,3 +28,7 @@ export function wrapDelta(delta: number, span: number): number {
   if (remainder < 0) remainder += span;
   return remainder - span / 2;
 }
+
+export function lerp(start: number, end: number, t: number): number {
+  return start + (end - start) * t;
+}
