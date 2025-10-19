@@ -1,0 +1,7 @@
+services:
+  - type: web
+    name: hackvegas-asteroids
+    runtime: static
+    pullRequestPreviewsEnabled: false
+    buildCommand: bun install && bun run build
+    staticPublishPath: ./dist
