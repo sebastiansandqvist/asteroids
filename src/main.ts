@@ -9,7 +9,7 @@ type Asteroid = State['asteroids'][number];
 type Ship = State['ship'];
 type Bullet = State['ship']['bullets'][number];
 
-const maxActiveBullets = 5;
+const maxActiveBullets = 10;
 
 type Viewport = ReturnType<typeof computeViewport>;
 
@@ -26,37 +26,42 @@ const isShooting = () =>
   gamepads.singlePlayer.isButtonDown(Button.South) || gamepads.singlePlayer.isButtonDown(Button.RightTrigger);
 
 function update(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number) {
-  state.ship.x += state.ship.dx;
-  state.ship.y += state.ship.dy;
-  state.ship.x = wrapWithMargin(state.ship.x, worldWidthUnits, state.ship.size / 2);
-  state.ship.y = wrapWithMargin(state.ship.y, worldHeightUnits, state.ship.size / 2);
+  if (state.ship.respawnMs <= 0) {
+    state.ship.x += state.ship.dx;
+    state.ship.y += state.ship.dy;
+    state.ship.x = wrapWithMargin(state.ship.x, worldWidthUnits, state.ship.size / 2);
+    state.ship.y = wrapWithMargin(state.ship.y, worldHeightUnits, state.ship.size / 2);
 
-  state.ship.isBoosting = gamepads.singlePlayer.leftStick.magnitude > 0.75;
-  if (state.ship.isBoosting) {
-    state.ship.angle = gamepads.singlePlayer.leftStick.angle;
-    state.ship.dx += Math.cos(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
-    state.ship.dy += Math.sin(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
+    state.ship.isBoosting = gamepads.singlePlayer.leftStick.magnitude > 0.75;
+    if (state.ship.isBoosting) {
+      state.ship.angle = gamepads.singlePlayer.leftStick.angle;
+      state.ship.dx += Math.cos(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
+      state.ship.dy += Math.sin(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
+    }
+  } else {
+    // while respawning, ignore movement inputs
+    state.ship.isBoosting = false;
   }
 
   {
     state.ship.fireCooldownMs = Math.max(0, state.ship.fireCooldownMs - dt);
 
-    if (state.ship.fireCooldownMs <= 0 && isShooting()) {
+    if (state.ship.respawnMs <= 0 && state.ship.fireCooldownMs <= 0 && isShooting()) {
       state.ship.fireCooldownMs = 200;
-      const bulletSpeed = Math.min(worldWidthUnits, worldHeightUnits) / 2 / 1000; // half the playfield width per second
+      const bulletSpeed = (Math.min(worldWidthUnits, worldHeightUnits) * 1.5) / 1000; // half the playfield width per second
       state.ship.bullets.push({
         x: state.ship.x + Math.cos(state.ship.angle) * state.ship.size,
         y: state.ship.y + Math.sin(state.ship.angle) * state.ship.size,
         dx: Math.cos(state.ship.angle) * bulletSpeed + state.ship.dx / dt,
         dy: Math.sin(state.ship.angle) * bulletSpeed + state.ship.dy / dt,
-        ttlMs: 1000,
+        ttlMs: 500,
       });
 
       if (state.ship.bullets.length > maxActiveBullets) {
         state.ship.bullets[0]!.ttlMs = 0;
       }
 
-      gamepads.singlePlayer.rumble(0.1, HapticIntensity.Light);
+      gamepads.singlePlayer.rumble(1, HapticIntensity.Light);
     }
   }
 
@@ -90,6 +95,13 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     const dy = wrapDelta(bullet.y - asteroid.y, worldHeightUnits);
     const radiusSum = asteroid.size + bulletRadiusWorld;
     return dx * dx + dy * dy <= radiusSum * radiusSum;
+  }
+
+  function pointHitsAsteroidRadius(px: number, py: number, asteroid: Asteroid): boolean {
+    const dx = wrapDelta(px - asteroid.x, worldWidthUnits);
+    const dy = wrapDelta(py - asteroid.y, worldHeightUnits);
+    const r = asteroid.size;
+    return dx * dx + dy * dy <= r * r;
   }
 
   function splitAsteroid(asteroid: Asteroid): Asteroid[] {
@@ -130,7 +142,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
       if (asteroid.timeUntilDead !== undefined) continue;
       if (bulletHitsAsteroidRadius(bullet, asteroid)) {
         gamepads.singlePlayer.rumble(
-          asteroid.size === Size.Big ? 50 : 30,
+          asteroid.size === Size.Big ? 80 : 50,
           asteroid.size === Size.Small ? HapticIntensity.Balanced : HapticIntensity.Heavy,
         );
         bulletsToRemove.add(bulletIndex);
@@ -160,6 +172,61 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   state.asteroids = state.asteroids.filter(
     (asteroid) => asteroid.timeUntilDead === undefined || asteroid.timeUntilDead > 0,
   );
+
+  // Player collision, respawn, and invincibility
+  {
+    // Tick invincibility timer
+    if (state.ship.invincibleMs > 0) {
+      state.ship.invincibleMs = Math.max(0, state.ship.invincibleMs - dt);
+    }
+
+    // Handle respawn countdown and safe center respawn
+    if (state.ship.respawnMs > 0) {
+      state.ship.respawnMs = Math.max(0, state.ship.respawnMs - dt);
+      if (state.ship.respawnMs === 0) {
+        const centerX = worldWidthUnits / 2;
+        const centerY = worldHeightUnits / 2;
+        const safetyBuffer = state.ship.size * 1.5;
+        const isSafe = state.asteroids.every((asteroid) => {
+          if (asteroid.timeUntilDead !== undefined) return true;
+          const dx = wrapDelta(centerX - asteroid.x, worldWidthUnits);
+          const dy = wrapDelta(centerY - asteroid.y, worldHeightUnits);
+          const r = asteroid.size + safetyBuffer;
+          return dx * dx + dy * dy > r * r;
+        });
+
+        if (isSafe) {
+          state.ship.x = centerX;
+          state.ship.y = centerY;
+          state.ship.invincibleMs = 2000;
+        } else {
+          // Try again shortly
+          state.ship.respawnMs = 50;
+        }
+      }
+    } else if (state.ship.invincibleMs <= 0) {
+      // Only collide when alive and not invincible
+      for (const asteroid of state.asteroids) {
+        if (asteroid.timeUntilDead !== undefined) continue;
+        const cosA = Math.cos(state.ship.angle);
+        const sinA = Math.sin(state.ship.angle);
+        const tipX = state.ship.x + cosA * state.ship.size;
+        const tipY = state.ship.y + sinA * state.ship.size;
+        if (
+          pointHitsAsteroidRadius(state.ship.x, state.ship.y, asteroid) ||
+          pointHitsAsteroidRadius(tipX, tipY, asteroid)
+        ) {
+          gamepads.singlePlayer.rumble(100, HapticIntensity.Heavy);
+          state.ship.respawnMs = 1500;
+          state.ship.invincibleMs = 0;
+          state.ship.dx = 0;
+          state.ship.dy = 0;
+          state.ship.bullets = [];
+          break;
+        }
+      }
+    }
+  }
 
   gamepads.clearInputs();
 }
@@ -199,6 +266,15 @@ function drawShape(ctx: Ctx, segs: readonly Segment[], x: number, y: number, ang
 }
 
 function drawShip(ctx: Ctx, ship: Ship, { v }: Viewport) {
+  // Hide while respawning
+  if (ship.respawnMs > 0) return;
+
+  // Flicker while invincible
+  if (ship.invincibleMs > 0) {
+    const phase = Math.floor(ship.invincibleMs / 100) % 2;
+    if (phase === 0) return;
+  }
+
   // todo: could store the segs and verts on state
   const { segs } = makeShipGeometry(ship.size * v, ship.isBoosting);
   drawShape(ctx, segs, ship.x * v, ship.y * v, ship.angle);
@@ -249,7 +325,7 @@ function main() {
 
     {
       timeToProcessPhysics += dt;
-      const physicsHz = 120;
+      const physicsHz = 240;
       const physicsTickMs = 1000 / physicsHz;
 
       while (timeToProcessPhysics > physicsTickMs) {
