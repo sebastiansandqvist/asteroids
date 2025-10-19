@@ -414,9 +414,10 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
     }
   }
 
-  // End condition -> back to Menu (overlay will show both scores)
-  const alivePlayers = state.players.filter((p) => p.ships.length > 0).length;
-  if (alivePlayers <= 1) {
+  // End condition -> back to Menu only when exactly one player remains and not during level transition
+  const blueAlive = (state.players[0]?.ships.length ?? 0) > 0;
+  const redAlive = (state.players[1]?.ships.length ?? 0) > 0;
+  if (state.levelTransitionMs <= 0 && blueAlive !== redAlive) {
     state.mode = GameMode.Menu;
   }
 }
