@@ -132,16 +132,33 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   const cy = rect.height / 2;
 
   const isGameOver = state.ship.lives === 0;
-  const scoreLine = `Score: ${state.ship.score}`;
+  const scoreLine = `Score ${state.ship.score}`;
   const button = gamepads.playerCount === 0 ? 'Connect a gamepad' : isGameOver ? 'Replay (A)' : 'Start (A)';
 
-  // smaller box and padding
-  const boxW = Math.min(rect.width * 0.45, 56 * v);
-  const boxH = isGameOver ? 20 * v : 12 * v;
+  ctx.save();
+
+  // text metrics first (all overlay text uses the score size)
+  ctx.font = `${8 * v}px Hyperspace`;
+  const lines = isGameOver ? [scoreLine, button] : [button];
+
+  // compute per-line metrics and overall block dimensions
+  const measures = lines.map((t) => ctx.measureText(t));
+  const widths = measures.map((m) => m.width);
+  const ascent = measures.reduce((a, m) => Math.max(a, m.actualBoundingBoxAscent ?? 0), 0);
+  const descent = measures.reduce((a, m) => Math.max(a, m.actualBoundingBoxDescent ?? 0), 0);
+  const lineBox = ascent + descent;
+  const gap = 2 * v;
+
+  const textBlockHeight = lineBox * lines.length + (lines.length > 1 ? gap * (lines.length - 1) : 0);
+  const maxWidth = widths.reduce((a, b) => Math.max(a, b), 0);
+  const paddingX = 6 * v;
+  const paddingY = 4 * v;
+
+  // dynamic box sized to content, centered on screen
+  const boxW = Math.min(rect.width * 0.9, maxWidth + paddingX * 2);
+  const boxH = paddingY * 2 + textBlockHeight;
   const x = cx - boxW / 2;
   const y = cy - boxH / 2;
-
-  ctx.save();
 
   // panel
   ctx.fillStyle = 'white';
@@ -150,20 +167,13 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   // text
   ctx.fillStyle = 'black';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.textBaseline = 'alphabetic';
 
-  // unify text size to match score (8 * v) and consistent line spacing
-  ctx.font = `${8 * v}px Hyperspace`;
-  if (isGameOver) {
-    ctx.fillText('GAME OVER', cx, cy - 8 * v);
-  }
-
-  ctx.font = `${8 * v}px Hyperspace`;
-  ctx.fillText(button, cx, cy);
-
-  if (isGameOver) {
-    ctx.font = `${8 * v}px Hyperspace`;
-    ctx.fillText(scoreLine, cx, cy + 8 * v);
+  // center the text block within the box using real font metrics
+  let baselineY = y + (boxH - textBlockHeight) / 2 + ascent;
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i]!, cx, baselineY);
+    baselineY += lineBox + (i < lines.length - 1 ? gap : 0);
   }
 
   ctx.restore();
@@ -183,7 +193,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
     easeCameraToZero(state, dt);
 
-    if (gamepads.singlePlayer.buttonJustPressed(Button.South)) {
+    if (gamepads.playerCount > 0 && gamepads.singlePlayer.buttonJustPressed(Button.South)) {
       startNewGame(state, worldWidthUnits, worldHeightUnits);
     }
 
@@ -367,6 +377,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   // Level clear -> seed next level
   if (state.asteroids.length === 0 && state.levelTransitionMs <= 0) {
     state.levelTransitionMs = 2000;
+    sounds('levelup').play();
   }
 
   // Player collision, respawn, and invincibility
@@ -433,6 +444,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
             state.mode = GameMode.Menu; // enter gameover/menu
             state.ship.respawnMs = 0;
             state.ship.invincibleMs = 0;
+            sounds('gameover').play();
           }
           break;
         }
@@ -490,6 +502,15 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     ctx.save();
     ctx.fillStyle = 'black';
     ctx.fillRect(0, 0, viewport.rect.width, viewport.rect.height);
+
+    // level text (next level number), centered
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `${8 * viewport.v}px Hyperspace`;
+    const nextLevelNum = state.level + 1;
+    ctx.fillText(`LEVEL ${nextLevelNum}`, viewport.rect.width / 2, viewport.rect.height / 2);
+
     ctx.restore();
     return;
   }
