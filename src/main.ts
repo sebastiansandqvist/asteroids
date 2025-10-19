@@ -6,23 +6,6 @@ import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
 
 // todo: screen shake
-// multiplayer
-//   use non-self bullet (point) in ship polygon for collision.
-//   red vs blue.
-//   initial ship size is lg. then md. then sm.
-
-type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
-
-type Asteroid = State['asteroids'][number];
-type Ship = State['ship'];
-type Bullet = State['ship']['bullets'][number];
-
-const maxActiveBullets = 10;
-
-const explosionDurationMsAsteroid = 400;
-const explosionDurationMsShip = 600;
-
-type Viewport = ReturnType<typeof computeViewport>;
 
 function computeViewport(rect: DOMRect) {
   const vw = rect.width / 100;
@@ -35,6 +18,18 @@ function computeViewport(rect: DOMRect) {
 
 const isShooting = () =>
   gamepads.singlePlayer.isButtonDown(Button.South) || gamepads.singlePlayer.isButtonDown(Button.RightTrigger);
+
+type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
+
+type Asteroid = State['asteroids'][number];
+type Ship = State['ship'];
+type Bullet = State['ship']['bullets'][number];
+
+const maxActiveBullets = 10;
+const explosionDurationMsAsteroid = 400;
+const explosionDurationMsShip = 600;
+
+type Viewport = ReturnType<typeof computeViewport>;
 
 function update(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number) {
   if (state.ship.respawnMs <= 0) {
@@ -170,6 +165,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
             [Size.Small]: 3,
           }[asteroid.size];
           sounds('explode').play({ volume: 1 / (soundSpeed ?? 1), speed: soundSpeed });
+          state.screenShakeAmount = 1 / (20 - asteroid.size * 2);
         }
         if (asteroid.size === Size.Big || asteroid.size === Size.Med) {
           asteroidsToRemove.add(asteroidIndex);
@@ -254,6 +250,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
             state.explosions = state.explosions.concat(burst);
             sounds('kaboom').play({ volume: 0.5 });
             sounds('kaboomBass').play({ volume: 1 });
+            state.screenShakeAmount = 1;
           }
           state.ship.bullets = [];
           break;
@@ -263,10 +260,12 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   }
 
   state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
+  easeCameraToZero(state, dt);
   gamepads.clearInputs();
 }
 
 function draw(state: State, ctx: Ctx, viewport: Viewport) {
+  console.log(state.screenShakeAmount);
   {
     ctx.lineWidth = Math.max(viewport.v / 4, 1);
     ctx.strokeStyle = 'white';
@@ -275,6 +274,15 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     ctx.lineCap = 'round';
   }
 
+  ctx.save();
+
+  const shakeStrength = 5;
+  const wobbleSpeed = 0.2;
+  ctx.translate(
+    Math.sin(performance.now() * wobbleSpeed) * state.screenShakeAmount * viewport.v * shakeStrength,
+    Math.sin(performance.now() * 1.5 * wobbleSpeed) * state.screenShakeAmount * viewport.v * shakeStrength,
+  );
+
   drawShip(ctx, state.ship, viewport);
   drawBullets(ctx, state.ship.bullets, viewport);
 
@@ -282,6 +290,8 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     drawAsteroid(ctx, asteroid, viewport);
   }
   drawExplosions(ctx, state.explosions, viewport.v);
+
+  ctx.restore();
 }
 
 type Point = readonly [number, number];
@@ -386,3 +396,12 @@ window.addEventListener('click', () => {
   audio.loop = true;
   audio.play();
 });
+
+export function easeCameraToZero(state: State, dt: number) {
+  const animationSpeed = 0.01;
+  state.screenShakeAmount = lerp(state.screenShakeAmount, 0, 1 - Math.exp(-animationSpeed * dt));
+}
+
+function lerp(start: number, end: number, t: number): number {
+  return start + (end - start) * t;
+}

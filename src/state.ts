@@ -5,6 +5,7 @@ export const Size = {
 } as const;
 
 export const state = {
+  screenShakeAmount: 0,
   ship: {
     x: 50,
     y: 50,
