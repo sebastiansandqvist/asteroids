@@ -12,7 +12,7 @@ export const Color = {
 } as const;
 
 export const ShipSize = {
-  Large: 6,
+  Large: 5,
   Med: 4,
   Small: 2,
 } as const;

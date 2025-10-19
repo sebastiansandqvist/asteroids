@@ -266,6 +266,18 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
     .concat(childrenToAdd)
     .filter((a) => a.timeUntilDead === undefined || a.timeUntilDead > 0);
 
+  // Versus level progression
+  if (state.asteroids.length === 0 && state.levelTransitionMs <= 0) {
+    state.levelTransitionMs = 2000;
+    sounds('levelup').play();
+  }
+  if (state.levelTransitionMs > 0) {
+    state.levelTransitionMs = Math.max(0, state.levelTransitionMs - dt);
+    if (state.levelTransitionMs === 0) {
+      nextLevel(state, worldWidthUnits, worldHeightUnits);
+    }
+  }
+
   // Ship splitting helper (non-overlapping)
   function splitShipFragment(player: Player, index: number): void {
     const s = player.ships[index]!;
@@ -275,8 +287,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
       return;
     }
     const attempts = 24;
-    const radius = (size: number) => size;
-    const minR = radius(next) * 2;
+    const minR = next * 2;
     const maxR = minR * 2;
 
     const base = s;
@@ -289,10 +300,10 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
         const overlaps = existing.some((e) => {
           const dx = x - e.x;
           const dy = y - e.y;
-          const rr = radius(next) + radius(e.size);
+          const rr = next + e.size;
           return dx * dx + dy * dy < rr * rr;
         });
-        if (!overlaps) return { x, y, dx: base.dx, dy: base.dy, size: next, invincibleMs: 500 };
+        if (!overlaps) return { x, y, dx: base.dx, dy: base.dy, size: next, invincibleMs: 1200 };
       }
       return null;
     };
@@ -362,6 +373,46 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
       }
     }
   });
+
+  // Ship vs ship collisions (opposite colors)
+  for (let ai = 0; ai < state.players.length; ai++) {
+    for (let bi = ai + 1; bi < state.players.length; bi++) {
+      const A = state.players[ai]!;
+      const B = state.players[bi]!;
+      for (let a = 0; a < A.ships.length; a++) {
+        const sa = A.ships[a]!;
+        for (let b = 0; b < B.ships.length; b++) {
+          const sb = B.ships[b]!;
+          if (sa.invincibleMs > 0 || sb.invincibleMs > 0) continue;
+          const dx = wrapDelta(sa.x - sb.x, worldWidthUnits);
+          const dy = wrapDelta(sa.y - sb.y, worldHeightUnits);
+          const r = sa.size + sb.size;
+          if (dx * dx + dy * dy <= r * r) {
+            const burstA = spawnSparkBurst(sa.x, sa.y, {
+              magnitude: sa.size * 2.5,
+              durationMs: explosionDurationMsShip,
+            });
+            const burstB = spawnSparkBurst(sb.x, sb.y, {
+              magnitude: sb.size * 2.5,
+              durationMs: explosionDurationMsShip,
+            });
+            state.explosions = state.explosions.concat(burstA, burstB);
+            sounds('kaboom').play({ volume: 0.5 });
+            sounds('kaboomBass').play({ volume: 1 });
+            state.screenShakeAmount = 1;
+            const idxB = B.ships.indexOf(sb);
+            if (idxB !== -1) splitShipFragment(B, idxB);
+            const idxA = A.ships.indexOf(sa);
+            if (idxA !== -1) {
+              splitShipFragment(A, idxA);
+              a--; // adjust after splice
+            }
+            break;
+          }
+        }
+      }
+    }
+  }
 
   // End condition -> back to Menu (overlay will show both scores)
   const alivePlayers = state.players.filter((p) => p.ships.length > 0).length;
@@ -516,11 +567,15 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   // text metrics first (all overlay text uses the score size)
   ctx.font = `${8 * v}px Hyperspace`;
   const hasBothPlayers = state.players.length >= 2;
-  const lines = hasBothPlayers
-    ? ([`Blue ${state.players[0]?.score ?? 0}`, `Red ${state.players[1]?.score ?? 0}`, actionLabel] as const)
-    : isGameOver
-      ? [scoreLine, actionLabel]
-      : [actionLabel];
+  let lines: string[];
+  if (hasBothPlayers) {
+    const blueAlive = (state.players[0]?.ships.length ?? 0) > 0;
+    const redAlive = (state.players[1]?.ships.length ?? 0) > 0;
+    const winnerText = blueAlive !== redAlive ? (blueAlive ? 'Blue wins!' : 'Red wins!') : null;
+    lines = winnerText ? [winnerText, actionLabel] : [actionLabel];
+  } else {
+    lines = isGameOver ? [scoreLine, actionLabel] : [actionLabel];
+  }
 
   // compute per-line metrics and overall block dimensions
   const measures = lines.map((t) => ctx.measureText(t));
@@ -540,6 +595,19 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   const boxH = paddingY * 2 + textBlockHeight;
   const x = cx - boxW / 2;
   const y = cy - boxH / 2;
+
+  // external scores (multiplayer)
+  if (hasBothPlayers) {
+    ctx.save();
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillStyle = Color.Blue;
+    ctx.fillText(`${state.players[0]!.score}`, x + paddingX, y - gap);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = Color.Red;
+    ctx.fillText(`${state.players[1]!.score}`, x + boxW - paddingX, y - gap);
+    ctx.restore();
+  }
 
   // panel
   ctx.fillStyle = 'white';
@@ -850,20 +918,21 @@ function drawUi(state: State, ctx: Ctx, viewport: Viewport) {
   const { v } = viewport;
 
   // Versus UI: Blue left, Red right; no lives
-  if ((state.mode as GameMode) === GameMode.Versus) {
+  if (state.mode === GameMode.Versus) {
     ctx.save();
     ctx.font = `${8 * v}px Hyperspace`;
     ctx.textBaseline = 'top';
+    const pad = 8 * v;
 
     // Blue score (left)
     ctx.fillStyle = Color.Blue;
     ctx.textAlign = 'left';
-    ctx.fillText(`${state.players[0]?.score ?? 0}`, 10, 10);
+    ctx.fillText(`${state.players[0]?.score ?? 0}`, pad, pad);
 
     // Red score (right)
     ctx.fillStyle = Color.Red;
     ctx.textAlign = 'right';
-    ctx.fillText(`${state.players[1]?.score ?? 0}`, viewport.rect.width - 10, 10);
+    ctx.fillText(`${state.players[1]?.score ?? 0}`, viewport.rect.width - pad, pad);
 
     ctx.restore();
     return;
