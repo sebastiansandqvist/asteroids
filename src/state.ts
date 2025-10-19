@@ -1,3 +1,5 @@
+export const GameMode = { Menu: 'Menu', Playing: 'Playing' } as const;
+
 export const Size = {
   Big: 7,
   Med: 4,
@@ -5,15 +7,18 @@ export const Size = {
 } as const;
 
 export const state = {
+  mode: GameMode.Menu as GameMode,
+  level: 1,
   screenShakeAmount: 0,
+  baseAsteroidSizes: [] as number[],
   ship: {
     score: 0,
     lives: 5,
     x: 50,
     y: 50,
-    dx: 0.2,
-    dy: 0.1,
-    angle: 0,
+    dx: 0,
+    dy: 0,
+    angle: -Math.PI / 2,
     size: 2,
     isBoosting: false,
     fireCooldownMs: 0,
@@ -59,5 +64,7 @@ export const state = {
     easing: 'linear' | 'easeOutQuad';
   }[],
 };
+state.baseAsteroidSizes = state.asteroids.map((a) => a.size);
 
+export type GameMode = (typeof GameMode)[keyof typeof GameMode];
 export type State = typeof state;

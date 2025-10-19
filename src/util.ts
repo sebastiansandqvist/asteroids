@@ -32,3 +32,9 @@ export function wrapDelta(delta: number, span: number): number {
 export function lerp(start: number, end: number, t: number): number {
   return start + (end - start) * t;
 }
+
+export function randomBetween(min: number, max: number): number {
+  const low = Math.min(min, max);
+  const high = Math.max(min, max);
+  return Math.random() * (high - low) + low;
+}

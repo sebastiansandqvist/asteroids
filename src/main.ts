@@ -1,7 +1,7 @@
 import { Button, gamepads, HapticIntensity } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
-import { lerp, randomIntInRange, wrapDelta, wrapWithMargin } from './util';
-import { Size, state, type State } from './state';
+import { lerp, randomBetween, randomIntInRange, wrapDelta, wrapWithMargin } from './util';
+import { GameMode, Size, state, type State } from './state';
 import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
 
@@ -29,7 +29,165 @@ const explosionDurationMsShip = 600;
 
 type Viewport = ReturnType<typeof computeViewport>;
 
+function randomAsteroidOutsideCenter(
+  size: number,
+  worldWidthUnits: number,
+  worldHeightUnits: number,
+  exclusionRadius: number,
+): Asteroid {
+  const centerX = worldWidthUnits / 2;
+  const centerY = worldHeightUnits / 2;
+  const maxTries = 50;
+
+  for (let i = 0; i < maxTries; i++) {
+    const x = Math.random() * worldWidthUnits;
+    const y = Math.random() * worldHeightUnits;
+    const dx = x - centerX;
+    const dy = y - centerY;
+    if (dx * dx + dy * dy <= (exclusionRadius + size) * (exclusionRadius + size)) continue;
+
+    return {
+      x,
+      y,
+      dx: randomBetween(-0.02, 0.02),
+      dy: randomBetween(-0.02, 0.02),
+      angle: randomBetween(0, Math.PI * 2),
+      dangle: randomBetween(-0.005, 0.005),
+      variant: randomIntInRange(0, 2),
+      size,
+    };
+  }
+
+  // Fallback: place at edge of exclusion radius if random tries all failed
+  const dir = Math.random() * Math.PI * 2;
+  const rx = centerX + Math.cos(dir) * (exclusionRadius + size * 2);
+  const ry = centerY + Math.sin(dir) * (exclusionRadius + size * 2);
+  return {
+    x: wrapWithMargin(rx, worldWidthUnits, size),
+    y: wrapWithMargin(ry, worldHeightUnits, size),
+    dx: randomBetween(-0.02, 0.02),
+    dy: randomBetween(-0.02, 0.02),
+    angle: 0,
+    dangle: randomBetween(-0.003, 0.003),
+    variant: randomIntInRange(0, 2),
+    size,
+  };
+}
+
+function seedLevel(state: State, level: number, worldWidthUnits: number, worldHeightUnits: number): void {
+  const baseSizes =
+    state.baseAsteroidSizes.length > 0
+      ? state.baseAsteroidSizes
+      : (state.asteroids.map((a) => a.size) as readonly number[]);
+  const exclusion = state.ship.size * 8;
+
+  const baseAsteroids = baseSizes.map((s) =>
+    randomAsteroidOutsideCenter(s, worldWidthUnits, worldHeightUnits, exclusion),
+  );
+
+  const extraBigCount = Math.max(0, (level - 1) * 2);
+  const extras = Array.from({ length: extraBigCount }, () =>
+    randomAsteroidOutsideCenter(Size.Big, worldWidthUnits, worldHeightUnits, exclusion),
+  );
+
+  state.asteroids = baseAsteroids.concat(extras);
+}
+
+function startNewGame(state: State, worldWidthUnits: number, worldHeightUnits: number): void {
+  state.mode = GameMode.Playing;
+  state.level = 1;
+
+  state.ship.score = 0;
+  state.ship.lives = 5;
+  state.ship.x = worldWidthUnits / 2;
+  state.ship.y = worldHeightUnits / 2;
+  state.ship.dx = 0;
+  state.ship.dy = 0;
+  state.ship.angle = -Math.PI / 2;
+  state.ship.isBoosting = false;
+  state.ship.fireCooldownMs = 200; // avoid accidental shot if A is held
+  state.ship.invincibleMs = 1500;
+  state.ship.respawnMs = 0;
+  state.ship.bullets = [];
+
+  seedLevel(state, state.level, worldWidthUnits, worldHeightUnits);
+}
+
+function nextLevel(state: State, worldWidthUnits: number, worldHeightUnits: number): void {
+  state.level += 1;
+  seedLevel(state, state.level, worldWidthUnits, worldHeightUnits);
+
+  // brief grace period, reset to center
+  state.ship.x = worldWidthUnits / 2;
+  state.ship.y = worldHeightUnits / 2;
+  state.ship.dx = 0;
+  state.ship.dy = 0;
+  state.ship.invincibleMs = 1500;
+  state.ship.respawnMs = 0;
+}
+
+function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
+  const { v, rect } = viewport;
+  const cx = rect.width / 2;
+  const cy = rect.height / 2;
+
+  const isGameOver = state.ship.lives === 0;
+  const title = isGameOver ? 'GAME OVER' : 'ASTEROIDS';
+  const button = isGameOver ? 'Replay (A)' : 'Start (A)';
+  const scoreLine = `Score: ${state.ship.score}`;
+
+  const boxW = Math.min(rect.width * 0.8, 120 * v);
+  const boxH = isGameOver ? 48 * v : 40 * v;
+  const x = cx - boxW / 2;
+  const y = cy - boxH / 2;
+
+  ctx.save();
+
+  // panel
+  ctx.fillStyle = 'white';
+  ctx.fillRect(x, y, boxW, boxH);
+
+  // text
+  ctx.fillStyle = 'black';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  ctx.font = `${12 * v}px Hyperspace`;
+  ctx.fillText(title, cx, y + 12 * v);
+
+  ctx.font = `${7 * v}px Hyperspace`;
+  ctx.fillText(button, cx, cy);
+
+  if (isGameOver) {
+    ctx.font = `${6 * v}px Hyperspace`;
+    ctx.fillText(scoreLine, cx, y + boxH - 10 * v);
+  }
+
+  ctx.restore();
+}
+
 function update(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number) {
+  // Menu mode: update background asteroids/explosions and wait for Start/Replay (A)
+  if (state.mode !== GameMode.Playing) {
+    state.asteroids.forEach((asteroid) => {
+      asteroid.x += asteroid.dx * dt;
+      asteroid.y += asteroid.dy * dt;
+      asteroid.angle += asteroid.dangle * dt;
+      asteroid.x = wrapWithMargin(asteroid.x, worldWidthUnits, asteroid.size);
+      asteroid.y = wrapWithMargin(asteroid.y, worldHeightUnits, asteroid.size);
+    });
+
+    state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
+    easeCameraToZero(state, dt);
+
+    if (gamepads.singlePlayer.isButtonDown(Button.South)) {
+      startNewGame(state, worldWidthUnits, worldHeightUnits);
+    }
+
+    gamepads.clearInputs();
+    return;
+  }
+
   if (state.ship.respawnMs <= 0) {
     state.ship.x += state.ship.dx;
     state.ship.y += state.ship.dy;
@@ -193,6 +351,11 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     (asteroid) => asteroid.timeUntilDead === undefined || asteroid.timeUntilDead > 0,
   );
 
+  // Level clear -> seed next level
+  if (state.asteroids.length === 0) {
+    nextLevel(state, worldWidthUnits, worldHeightUnits);
+  }
+
   // Player collision, respawn, and invincibility
   {
     // Tick invincibility timer
@@ -253,6 +416,11 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
             state.screenShakeAmount = 1;
           }
           state.ship.bullets = [];
+          if (state.ship.lives === 0) {
+            state.mode = GameMode.Menu; // enter gameover/menu
+            state.ship.respawnMs = 0;
+            state.ship.invincibleMs = 0;
+          }
           break;
         }
       }
@@ -305,7 +473,9 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
   }
 
   // draw ui before screenshake:
-  drawUi(state, ctx, viewport);
+  if (state.mode === GameMode.Playing) {
+    drawUi(state, ctx, viewport);
+  }
 
   ctx.save();
 
@@ -319,13 +489,19 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
     );
   }
 
-  drawShip(ctx, state.ship, viewport);
-  drawBullets(ctx, state.ship.bullets, viewport);
+  if (state.mode === GameMode.Playing) {
+    drawShip(ctx, state.ship, viewport);
+    drawBullets(ctx, state.ship.bullets, viewport);
+  }
 
   for (const asteroid of state.asteroids) {
     drawAsteroid(ctx, asteroid, viewport);
   }
   drawExplosions(ctx, state.explosions, viewport.v);
+
+  if (state.mode === GameMode.Menu) {
+    drawMenuOrGameOverOverlay(state, ctx, viewport);
+  }
 
   ctx.restore();
 }
