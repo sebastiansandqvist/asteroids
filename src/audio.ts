@@ -1,5 +1,6 @@
 import explosionWav from './sounds/explosion.wav';
 import explosionShipWav from './sounds/explosion-ship.wav';
+import explosionShipBassWav from './sounds/explosion-ship-bass.wav';
 import shootWav from './sounds/shoot.wav';
 
 let cachedGlobalAudio: { audioContext: AudioContext; masterGain: GainNode; disconnect: () => void } | null = null;
@@ -62,7 +63,7 @@ function createSounds<T extends Record<string, string>>(sources: T) {
     src: string,
   ): {
     readonly src: string;
-    play: (options?: { volume?: number; speed?: number; echo?: boolean }) => void;
+    play: (options?: { volume?: number; speed?: number; pitch?: number }) => void;
     cancel: () => void;
     fadeOut: (options?: { duration?: number }) => Promise<void>;
     connect: () => void;
@@ -145,5 +146,6 @@ function createSounds<T extends Record<string, string>>(sources: T) {
 export const sounds = createSounds({
   explode: explosionWav,
   kaboom: explosionShipWav,
+  kaboomBass: explosionShipBassWav,
   shoot: shootWav,
 });

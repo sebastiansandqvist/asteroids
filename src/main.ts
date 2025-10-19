@@ -6,6 +6,10 @@ import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
 
 // todo: screen shake
+// multiplayer
+//   use non-self bullet (point) in ship polygon for collision.
+//   red vs blue.
+//   initial ship size is lg. then md. then sm.
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -68,7 +72,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
         state.ship.bullets[0]!.ttlMs = 0;
       }
 
-      sounds('shoot').play({ volume: 1 });
+      sounds('shoot').play({ volume: 5 });
       gamepads.singlePlayer.rumble(1, HapticIntensity.Light);
     }
   }
@@ -160,7 +164,12 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
             durationMs: explosionDurationMsAsteroid,
           });
           state.explosions = state.explosions.concat(burst);
-          sounds('explode').play({ volume: 0.5 });
+          const soundSpeed = {
+            [Size.Big]: 1,
+            [Size.Med]: 2,
+            [Size.Small]: 3,
+          }[asteroid.size];
+          sounds('explode').play({ volume: 1 / (soundSpeed ?? 1), speed: soundSpeed });
         }
         if (asteroid.size === Size.Big || asteroid.size === Size.Med) {
           asteroidsToRemove.add(asteroidIndex);
@@ -232,8 +241,8 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
           pointHitsAsteroidRadius(state.ship.x, state.ship.y, asteroid) ||
           pointHitsAsteroidRadius(tipX, tipY, asteroid)
         ) {
-          gamepads.singlePlayer.rumble(100, HapticIntensity.Heavy);
-          state.ship.respawnMs = 1500;
+          gamepads.singlePlayer.rumble(500, HapticIntensity.Heavy);
+          state.ship.respawnMs = 2000;
           state.ship.invincibleMs = 0;
           state.ship.dx = 0;
           state.ship.dy = 0;
@@ -244,6 +253,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
             });
             state.explosions = state.explosions.concat(burst);
             sounds('kaboom').play({ volume: 0.5 });
+            sounds('kaboomBass').play({ volume: 1 });
           }
           state.ship.bullets = [];
           break;
@@ -370,8 +380,9 @@ function main() {
 
 main();
 
-// window.addEventListener('click', () => {
-//   const audio = document.querySelector('audio')!;
-//   audio.loop = true;
-//   audio.play();
-// });
+window.addEventListener('click', () => {
+  const audio = document.querySelector('audio')!;
+  audio.volume = 0.2;
+  audio.loop = true;
+  audio.play();
+});
