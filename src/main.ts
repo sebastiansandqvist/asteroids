@@ -1,9 +1,10 @@
-import { Button, gamepads, HapticIntensity } from '@spud.gg/api';
+import { Button, GamepadBaseLayout, gamepads, HapticIntensity } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
 import { lerp, randomBetween, randomIntInRange, wrapDelta, wrapWithMargin } from './util';
 import { GameMode, Size, state, type State, Color, ShipSize } from './state';
 import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
+import { createOffscreenCanvas, setupWebglCanvas, drawWithShaders } from './shader';
 
 function computeViewport(rect: DOMRect) {
   const vw = rect.width / 100;
@@ -79,7 +80,7 @@ function startVersus(state: State, worldWidthUnits: number, worldHeightUnits: nu
           dx: 0,
           dy: 0,
           size: ShipSize.Large,
-          invincibleMs: 1200,
+          invincibleMs: 2000,
         },
       ],
       bullets: [],
@@ -97,7 +98,7 @@ function startVersus(state: State, worldWidthUnits: number, worldHeightUnits: nu
           dx: 0,
           dy: 0,
           size: ShipSize.Large,
-          invincibleMs: 1200,
+          invincibleMs: 2000,
         },
       ],
       bullets: [],
@@ -291,7 +292,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
             dx: 0,
             dy: 0,
             size: ShipSize.Large,
-            invincibleMs: 1500,
+            invincibleMs: 2000,
           },
         ];
         p.bullets = [];
@@ -324,7 +325,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
           const rr = next + e.size;
           return dx * dx + dy * dy < rr * rr;
         });
-        if (!overlaps) return { x, y, dx: base.dx, dy: base.dy, size: next, invincibleMs: 1200 };
+        if (!overlaps) return { x, y, dx: base.dx, dy: base.dy, size: next, invincibleMs: 2000 };
       }
       return null;
     };
@@ -553,7 +554,7 @@ function startNewGame(state: State, worldWidthUnits: number, worldHeightUnits: n
   state.ship.angle = -Math.PI / 2;
   state.ship.isBoosting = false;
   state.ship.fireCooldownMs = 200; // avoid accidental shot if A is held
-  state.ship.invincibleMs = 1500;
+  state.ship.invincibleMs = 2000;
   state.ship.respawnMs = 0;
   state.ship.bullets = [];
 
@@ -569,7 +570,7 @@ function nextLevel(state: State, worldWidthUnits: number, worldHeightUnits: numb
   state.ship.y = worldHeightUnits / 2;
   state.ship.dx = 0;
   state.ship.dy = 0;
-  state.ship.invincibleMs = 1500;
+  state.ship.invincibleMs = 2000;
   state.ship.respawnMs = 0;
 }
 
@@ -580,14 +581,15 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
 
   const isGameOver = state.ship.lives === 0;
   const scoreLine = `Score ${state.ship.score}`;
+  const buttonLabel = gamepads.singlePlayer.gamepadInfo.baseLayout === GamepadBaseLayout.PlayStation ? 'X' : 'A';
   const actionLabel =
     gamepads.playerCount === 0
       ? 'Connect a gamepad'
       : isGameOver
-        ? 'Replay (A)'
+        ? `Replay (${buttonLabel})`
         : gamepads.playerCount >= 2
-          ? 'VERSUS (A)'
-          : 'Start (A)';
+          ? `Versus (${buttonLabel})`
+          : `Start (${buttonLabel})`;
 
   ctx.save();
 
@@ -637,11 +639,11 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
   }
 
   // panel
-  ctx.fillStyle = 'white';
-  ctx.fillRect(x, y, boxW, boxH);
+  ctx.strokeStyle = 'white';
+  ctx.strokeRect(x, y, boxW, boxH);
 
   // text
-  ctx.fillStyle = 'black';
+  ctx.fillStyle = 'white';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
 
@@ -657,7 +659,7 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
 
 function update(state: State, dt: number, worldWidthUnits: number, worldHeightUnits: number) {
   // Versus mode update
-  if ((state.mode as GameMode) === GameMode.Versus) {
+  if (state.mode === GameMode.Versus) {
     updateVersus(state, dt, worldWidthUnits, worldHeightUnits);
     gamepads.clearInputs();
     return;
@@ -1106,31 +1108,41 @@ function drawAsteroid(ctx: Ctx, asteroid: Asteroid, { v }: Viewport) {
 }
 
 function main() {
-  const canvas = document.createElement('canvas');
-  document.body.appendChild(canvas);
-  const ctx = canvas.getContext('2d')!;
+  const { offscreenCanvas, offscreenCtx } = createOffscreenCanvas();
+  const { canvas: webglCanvas, gl, shaderData } = setupWebglCanvas(offscreenCanvas, offscreenCtx);
+  document.body.appendChild(webglCanvas);
 
   let lastFrameTime = 0;
   let timeToProcessPhysics = 0;
 
+  function renderToOffscreen(
+    canvas: OffscreenCanvas,
+    ctx: OffscreenCanvasRenderingContext2D,
+    targetCanvas: HTMLCanvasElement,
+  ) {
+    const canvasRect = targetCanvas.getBoundingClientRect();
+
+    // Size the offscreen canvas to device pixels and set transform
+    canvas.width = canvasRect.width * window.devicePixelRatio;
+    canvas.height = canvasRect.height * window.devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+
+    const viewport = computeViewport(canvasRect);
+
+    // Clear and draw game frame onto the offscreen 2D context
+    ctx.clearRect(0, 0, canvasRect.width, canvasRect.height);
+    draw(state, ctx, viewport);
+  }
+
   function gameLoop() {
     const now = performance.now();
-    const maxDt = 100; // if returning to tab after some timem or some other weirdness, dt can be very big, so we clamp it to some max delta time to preserve snappiness.
+    const maxDt = 100; // clamp delta to preserve snappiness
     const dt = Math.min(now - lastFrameTime, maxDt);
     lastFrameTime = now;
 
     requestAnimationFrame(gameLoop);
 
-    if (!ctx) return;
-
-    const canvasRect = canvas.getBoundingClientRect();
-
-    {
-      canvas.width = canvasRect.width * window.devicePixelRatio;
-      canvas.height = canvasRect.height * window.devicePixelRatio;
-      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
-    }
-
+    const canvasRect = webglCanvas.getBoundingClientRect();
     const viewport = computeViewport(canvasRect);
 
     {
@@ -1144,9 +1156,8 @@ function main() {
       }
     }
 
-    {
-      draw(state, ctx, viewport);
-    }
+    // Draw the offscreen 2D frame, then apply WebGL post-processing
+    drawWithShaders(gl, webglCanvas, shaderData, renderToOffscreen);
   }
 
   gameLoop();
@@ -1156,7 +1167,7 @@ main();
 
 window.addEventListener('click', () => {
   const audio = document.querySelector('audio')!;
-  audio.volume = 0.2;
+  audio.volume = 0.3;
   audio.loop = true;
   audio.play();
 });
