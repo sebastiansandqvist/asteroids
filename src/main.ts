@@ -2,6 +2,7 @@ import { Button, gamepads, HapticIntensity } from '@spud.gg/api';
 import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
 import { randomIntInRange, wrapDelta, wrapWithMargin } from './util';
 import { Size, state, type State } from './state';
+import { sounds } from './audio';
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -343,3 +344,9 @@ function main() {
 }
 
 main();
+
+window.addEventListener('click', () => {
+  const audio = document.querySelector('audio')!;
+  audio.loop = true;
+  audio.play();
+});
