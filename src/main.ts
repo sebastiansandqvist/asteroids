@@ -3,6 +3,9 @@ import { makeAsteroidGeometry, makeShipGeometry } from './shapes';
 import { randomIntInRange, wrapDelta, wrapWithMargin } from './util';
 import { Size, state, type State } from './state';
 import { sounds } from './audio';
+import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
+
+// todo: screen shake
 
 type Ctx = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
 
@@ -11,6 +14,9 @@ type Ship = State['ship'];
 type Bullet = State['ship']['bullets'][number];
 
 const maxActiveBullets = 10;
+
+const explosionDurationMsAsteroid = 400;
+const explosionDurationMsShip = 600;
 
 type Viewport = ReturnType<typeof computeViewport>;
 
@@ -62,6 +68,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
         state.ship.bullets[0]!.ttlMs = 0;
       }
 
+      sounds('shoot').play({ volume: 1 });
       gamepads.singlePlayer.rumble(1, HapticIntensity.Light);
     }
   }
@@ -147,6 +154,14 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
           asteroid.size === Size.Small ? HapticIntensity.Balanced : HapticIntensity.Heavy,
         );
         bulletsToRemove.add(bulletIndex);
+        {
+          const burst = spawnSparkBurst(asteroid.x, asteroid.y, {
+            magnitude: asteroid.size,
+            durationMs: explosionDurationMsAsteroid,
+          });
+          state.explosions = state.explosions.concat(burst);
+          sounds('explode').play({ volume: 0.5 });
+        }
         if (asteroid.size === Size.Big || asteroid.size === Size.Med) {
           asteroidsToRemove.add(asteroidIndex);
           const children = splitAsteroid(asteroid);
@@ -222,6 +237,14 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
           state.ship.invincibleMs = 0;
           state.ship.dx = 0;
           state.ship.dy = 0;
+          {
+            const burst = spawnSparkBurst(state.ship.x, state.ship.y, {
+              magnitude: state.ship.size * 2.5,
+              durationMs: explosionDurationMsShip,
+            });
+            state.explosions = state.explosions.concat(burst);
+            sounds('kaboom').play({ volume: 0.5 });
+          }
           state.ship.bullets = [];
           break;
         }
@@ -229,6 +252,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     }
   }
 
+  state.explosions = tickExplosions(state.explosions, dt, worldWidthUnits, worldHeightUnits);
   gamepads.clearInputs();
 }
 
@@ -247,6 +271,7 @@ function draw(state: State, ctx: Ctx, viewport: Viewport) {
   for (const asteroid of state.asteroids) {
     drawAsteroid(ctx, asteroid, viewport);
   }
+  drawExplosions(ctx, state.explosions, viewport.v);
 }
 
 type Point = readonly [number, number];
@@ -345,8 +370,8 @@ function main() {
 
 main();
 
-window.addEventListener('click', () => {
-  const audio = document.querySelector('audio')!;
-  audio.loop = true;
-  audio.play();
-});
+// window.addEventListener('click', () => {
+//   const audio = document.querySelector('audio')!;
+//   audio.loop = true;
+//   audio.play();
+// });

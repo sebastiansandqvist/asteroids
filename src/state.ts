@@ -42,6 +42,19 @@ export const state = {
     size: number;
     timeUntilDead?: number;
   }[],
+  explosions: [] as {
+    kind: 'spark';
+    x: number;
+    y: number;
+    dx: number;
+    dy: number;
+    angle: number;
+    spin: number;
+    length: number;
+    lifeMs: number;
+    maxLifeMs: number;
+    easing: 'linear' | 'easeOutQuad';
+  }[],
 };
 
 export type State = typeof state;
