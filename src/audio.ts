@@ -1,9 +1,9 @@
-import explosionWav from './sounds/explosion.wav';
-import explosionShipWav from './sounds/explosion-ship.wav';
-import explosionShipBassWav from './sounds/explosion-ship-bass.wav';
-import shootWav from './sounds/shoot.wav';
-import levelupWav from './sounds/levelup.wav';
-import gameoverWav from './sounds/gameover.wav';
+import explosionWav from '../public/sounds/explosion.wav';
+import explosionShipWav from '../public/sounds/explosion-ship.wav';
+import explosionShipBassWav from '../public/sounds/explosion-ship-bass.wav';
+import shootWav from '../public/sounds/shoot.wav';
+import levelupWav from '../public/sounds/levelup.wav';
+import gameoverWav from '../public/sounds/gameover.wav';
 
 let cachedGlobalAudio: { audioContext: AudioContext; masterGain: GainNode; disconnect: () => void } | null = null;
 
