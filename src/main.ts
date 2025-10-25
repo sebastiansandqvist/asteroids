@@ -65,6 +65,7 @@ function startVersus(state: State, worldWidthUnits: number, worldHeightUnits: nu
   state.level = 1;
   state.levelTransitionMs = 0;
   state.screenShakeAmount = 0;
+  state.menuAnimationMs = 0;
   state.explosions = [];
   seedLevel(state, state.level, worldWidthUnits, worldHeightUnits);
   state.players = [
@@ -452,6 +453,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
   const redAlive = (state.players[1]?.ships.length ?? 0) > 0;
   if (state.levelTransitionMs <= 0 && blueAlive !== redAlive) {
     state.mode = GameMode.Menu;
+    state.menuAnimationMs = 0;
   }
 }
 
@@ -555,6 +557,7 @@ function startNewGame(state: State, worldWidthUnits: number, worldHeightUnits: n
   state.players = [];
   state.explosions = [];
   state.screenShakeAmount = 0;
+  state.menuAnimationMs = 0;
 
   state.ship.score = 0;
   state.ship.lives = 5;
@@ -604,6 +607,17 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
 
   ctx.save();
 
+  // Animation timing
+  const scaleInDuration = 200; // 0.2s for rectangle scale-in
+  const flickerStartDelay = scaleInDuration; // Start flicker after scale-in
+  const flickerDuration = 1500; // 1.5s for text flicker
+  const totalAnimationDuration = scaleInDuration + flickerDuration;
+
+  // Calculate animation progress
+  const animTime = Math.min(state.menuAnimationMs, totalAnimationDuration);
+  const scaleProgress = Math.min(animTime / scaleInDuration, 1);
+  const flickerProgress = Math.max(0, Math.min((animTime - flickerStartDelay) / flickerDuration, 1));
+
   // text metrics first (all overlay text uses the score size)
   ctx.font = `${8 * v}px Hyperspace`;
   const hasBothPlayers = state.players.length >= 2;
@@ -649,20 +663,52 @@ function drawMenuOrGameOverOverlay(state: State, ctx: Ctx, viewport: Viewport) {
     ctx.restore();
   }
 
-  // panel
-  ctx.strokeStyle = 'white';
-  ctx.strokeRect(x, y, boxW, boxH);
+  // panel with scale-in animation
+  if (scaleProgress > 0) {
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.scale(scaleProgress, scaleProgress);
+    ctx.translate(-cx, -cy);
+    ctx.strokeStyle = 'white';
+    ctx.strokeRect(x, y, boxW, boxH);
+    ctx.restore();
+  }
 
-  // text
-  ctx.fillStyle = 'white';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
+  // text with flicker animation
+  if (flickerProgress > 0) {
+    // Flicker effect: on/off with decreasing frequency over 1.5s
+    const flickerIntensity = (() => {
+      if (flickerProgress < 0.25) {
+        // Rapid flicker for first 25% (0.375s)
+        return Math.sin(flickerProgress * 25) > 0 ? 1 : 0;
+      } else if (flickerProgress < 0.5) {
+        // Medium flicker (0.375s)
+        return Math.sin(flickerProgress * 12.5) > 0 ? 1 : 0;
+      } else if (flickerProgress < 0.75) {
+        // Slower flicker (0.375s)
+        return Math.sin(flickerProgress * 6) > -0.2 ? 1 : 0;
+      } else if (flickerProgress < 0.9) {
+        // Very slow flicker (0.225s)
+        return Math.sin(flickerProgress * 3) > -0.5 ? 1 : 0;
+      } else {
+        // Solid at the end (last 0.15s)
+        return 1;
+      }
+    })();
 
-  // center the text block within the box using real font metrics
-  let baselineY = y + (boxH - textBlockHeight) / 2 + ascent;
-  for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i]!, cx, baselineY);
-    baselineY += lineBox + (i < lines.length - 1 ? gap : 0);
+    ctx.save();
+    ctx.globalAlpha = flickerIntensity;
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+
+    // center the text block within the box using real font metrics
+    let baselineY = y + (boxH - textBlockHeight) / 2 + ascent;
+    for (let i = 0; i < lines.length; i++) {
+      ctx.fillText(lines[i]!, cx, baselineY);
+      baselineY += lineBox + (i < lines.length - 1 ? gap : 0);
+    }
+    ctx.restore();
   }
 
   ctx.restore();
@@ -677,6 +723,8 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   }
   // Menu mode: update background asteroids/explosions and wait for Start/Replay (A)
   if (state.mode !== GameMode.Playing) {
+    // Update menu animation timer
+    state.menuAnimationMs += dt;
     state.asteroids.forEach((asteroid) => {
       asteroid.x += asteroid.dx * dt;
       asteroid.y += asteroid.dy * dt;
@@ -942,6 +990,7 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
           state.ship.bullets = [];
           if (state.ship.lives === 0) {
             state.mode = GameMode.Menu; // enter gameover/menu
+            state.menuAnimationMs = 0;
             state.ship.respawnMs = 0;
             state.ship.invincibleMs = 0;
             sounds('gameover').play();

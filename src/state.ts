@@ -23,6 +23,7 @@ export const state = {
   mode: GameMode.Menu as GameMode,
   level: 1,
   levelTransitionMs: 0,
+  menuAnimationMs: 0,
   screenShakeAmount: 0,
   baseAsteroidSizes: [] as number[],
   ship: {
