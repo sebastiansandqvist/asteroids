@@ -5,3 +5,5 @@ services:
     pullRequestPreviewsEnabled: false
     buildCommand: bun install && bun run build
     staticPublishPath: ./dist
+    domains:
+      - asteroids.hackvegas.lol
