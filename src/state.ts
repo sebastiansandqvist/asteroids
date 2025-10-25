@@ -1,9 +1,9 @@
 export const GameMode = { Menu: 'Menu', Playing: 'Playing', Versus: 'Versus' } as const;
 
 export const Size = {
-  Big: 7,
-  Med: 4,
-  Small: 2,
+  Big: 3.5,
+  Med: 2,
+  Small: 1,
 } as const;
 
 export const Color = {
@@ -12,9 +12,9 @@ export const Color = {
 } as const;
 
 export const ShipSize = {
-  Large: 5,
-  Med: 4,
-  Small: 2,
+  Large: 2.5,
+  Med: 2,
+  Small: 1,
 } as const;
 
 export type GameMode = (typeof GameMode)[keyof typeof GameMode];
@@ -70,12 +70,12 @@ export const state = {
     }[];
   }[],
   asteroids: [
-    { x: 20, y: 20, dx: 0.01, dy: 0.01, angle: 0, dangle: -0.001, variant: 0, size: Size.Big },
-    { x: 50, y: 20, dx: 0.01, dy: -0.01, angle: 0, dangle: 0.003, variant: 2, size: Size.Big },
-    { x: 40, y: 0, dx: -0.01, dy: -0.01, angle: 0, dangle: -0.002, variant: 2, size: Size.Big },
-    { x: 90, y: 70, dx: -0.01, dy: 0.01, angle: 0, dangle: 0.002, variant: 1, size: Size.Big },
-    { x: 90, y: 90, dx: -0.005, dy: -0.01, angle: 50, dangle: 0.0005, variant: 1, size: Size.Med },
-    { x: 40, y: 90, dx: -0.002, dy: 0.004, angle: 50, dangle: 0.0005, variant: 3, size: Size.Small },
+    { x: 20, y: 20, dx: 0.005, dy: 0.005, angle: 0, dangle: -0.001, variant: 0, size: Size.Big },
+    { x: 50, y: 20, dx: 0.005, dy: -0.005, angle: 0, dangle: 0.003, variant: 2, size: Size.Big },
+    { x: 40, y: 0, dx: -0.005, dy: -0.005, angle: 0, dangle: -0.002, variant: 2, size: Size.Big },
+    { x: 90, y: 70, dx: -0.005, dy: 0.005, angle: 0, dangle: 0.002, variant: 1, size: Size.Big },
+    { x: 90, y: 90, dx: -0.0025, dy: -0.005, angle: 50, dangle: 0.0005, variant: 1, size: Size.Med },
+    { x: 40, y: 90, dx: -0.001, dy: 0.002, angle: 50, dangle: 0.0005, variant: 3, size: Size.Small },
   ] as {
     x: number;
     y: number;

@@ -5,6 +5,7 @@ import { GameMode, Size, state, type State, Color, ShipSize } from './state';
 import { sounds } from './audio';
 import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
 import { createOffscreenCanvas, setupWebglCanvas, drawWithShaders } from './shader';
+import backgroundMusic from '../public/sounds/moonlight-sonata.mp3';
 
 function computeViewport(rect: DOMRect) {
   const vw = rect.width / 100;
@@ -137,7 +138,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
     // Fire (hold-to-fire) with per-player cooldown
     player.fireCooldownMs = Math.max(0, player.fireCooldownMs - dt);
     if (player.ships.length > 0 && player.fireCooldownMs <= 0 && padIsShooting(pad)) {
-      const bulletSpeed = (Math.min(worldWidthUnits, worldHeightUnits) * 1.5) / 1000;
+      const bulletSpeed = Math.min(worldWidthUnits, worldHeightUnits) / 1000;
       const dirx = Math.cos(player.angle);
       const diry = Math.sin(player.angle);
       for (const s of player.ships) {
@@ -146,7 +147,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
           y: s.y + diry * s.size,
           dx: dirx * bulletSpeed + s.dx / dt,
           dy: diry * bulletSpeed + s.dy / dt,
-          ttlMs: 500,
+          ttlMs: 750,
           color: player.color,
         });
       }
@@ -157,7 +158,7 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
 
     // Movement (match SP accel constant)
     if (player.isBoosting) {
-      const accel = 0.0005 * pad.leftStick.magnitude * dt;
+      const accel = 0.00025 * pad.leftStick.magnitude * dt;
       const ax = Math.cos(player.angle) * accel;
       const ay = Math.sin(player.angle) * accel;
       for (const s of player.ships) {
@@ -186,11 +187,11 @@ function updateVersus(state: State, dt: number, worldWidthUnits: number, worldHe
 
   // Shared constants (mirror SP)
   const explosionTtlMs = 0;
-  const childSpeedMin = 0.01;
-  const childSpeedMax = 0.03;
-  const spawnJitter = 0.25;
-  const childDangleMax = 0.005;
-  const bulletRadiusWorld = 0.5;
+  const childSpeedMin = 0.005;
+  const childSpeedMax = 0.015;
+  const spawnJitter = 0.125;
+  const childDangleMax = 0.0025;
+  const bulletRadiusWorld = 0.25;
 
   const scoreForAsteroid = (s: number) => (s === Size.Big ? 20 : s === Size.Med ? 50 : 100);
   const scoreForShip = (sz: number) => (sz === ShipSize.Large ? 40 : sz === ShipSize.Med ? 100 : 200);
@@ -502,10 +503,10 @@ function randomAsteroidOutsideCenter(
     return {
       x,
       y,
-      dx: randomBetween(-0.02, 0.02),
-      dy: randomBetween(-0.02, 0.02),
+      dx: randomBetween(-0.01, 0.01),
+      dy: randomBetween(-0.01, 0.01),
       angle: randomBetween(0, Math.PI * 2),
-      dangle: randomBetween(-0.005, 0.005),
+      dangle: randomBetween(-0.0025, 0.0025),
       variant: randomIntInRange(0, 2),
       size,
     };
@@ -518,10 +519,10 @@ function randomAsteroidOutsideCenter(
   return {
     x: wrapWithMargin(rx, worldWidthUnits, size),
     y: wrapWithMargin(ry, worldHeightUnits, size),
-    dx: randomBetween(-0.02, 0.02),
-    dy: randomBetween(-0.02, 0.02),
+    dx: randomBetween(-0.01, 0.01),
+    dy: randomBetween(-0.01, 0.01),
     angle: 0,
-    dangle: randomBetween(-0.003, 0.003),
+    dangle: randomBetween(-0.0015, 0.0015),
     variant: randomIntInRange(0, 2),
     size,
   };
@@ -716,9 +717,12 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
     state.ship.isBoosting = gamepads.singlePlayer.leftStick.magnitude > 0.75;
     if (state.ship.isBoosting) {
       state.ship.angle = gamepads.singlePlayer.leftStick.angle;
-      state.ship.dx += Math.cos(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
-      state.ship.dy += Math.sin(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0005 * dt;
+      state.ship.dx += Math.cos(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0003 * dt;
+      state.ship.dy += Math.sin(state.ship.angle) * gamepads.singlePlayer.leftStick.magnitude * 0.0003 * dt;
     }
+    // else if (gamepads.singlePlayer.rightStick.magnitude > 0.75) {
+    //   state.ship.angle = gamepads.singlePlayer.rightStick.angle;
+    // }
   } else {
     // while respawning, ignore movement inputs
     state.ship.isBoosting = false;
@@ -729,13 +733,13 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
 
     if (state.ship.respawnMs <= 0 && state.ship.fireCooldownMs <= 0 && isShooting()) {
       state.ship.fireCooldownMs = 278 / 2;
-      const bulletSpeed = (Math.min(worldWidthUnits, worldHeightUnits) * 1.5) / 1000; // half the playfield width per second
+      const bulletSpeed = Math.min(worldWidthUnits, worldHeightUnits) / 1000; // half the playfieh per second
       state.ship.bullets.push({
         x: state.ship.x + Math.cos(state.ship.angle) * state.ship.size,
         y: state.ship.y + Math.sin(state.ship.angle) * state.ship.size,
         dx: Math.cos(state.ship.angle) * bulletSpeed + state.ship.dx / dt,
         dy: Math.sin(state.ship.angle) * bulletSpeed + state.ship.dy / dt,
-        ttlMs: 500,
+        ttlMs: 750,
       });
 
       if (state.ship.bullets.length > maxActiveBullets) {
@@ -766,11 +770,11 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
 
   const explosionTtlMs = 0;
   // const explosionTtlMs = 300;
-  const childSpeedMin = 0.01;
-  const childSpeedMax = 0.03;
-  const spawnJitter = 0.25;
-  const childDangleMax = 0.005;
-  const bulletRadiusWorld = 0.5;
+  const childSpeedMin = 0.005;
+  const childSpeedMax = 0.015;
+  const spawnJitter = 0.125;
+  const childDangleMax = 0.0025;
+  const bulletRadiusWorld = 0.25;
 
   function bulletHitsAsteroidRadius(bullet: Bullet, asteroid: Asteroid): boolean {
     const dx = wrapDelta(bullet.x - asteroid.x, worldWidthUnits);
@@ -1118,6 +1122,7 @@ function drawAsteroid(ctx: Ctx, asteroid: Asteroid, { v }: Viewport) {
 }
 
 function main() {
+  setupBackgroundMusic();
   const { offscreenCanvas, offscreenCtx } = createOffscreenCanvas();
   const { canvas: webglCanvas, gl, shaderData } = setupWebglCanvas(offscreenCanvas, offscreenCtx);
   document.body.appendChild(webglCanvas);
@@ -1175,12 +1180,21 @@ function main() {
 
 main();
 
-window.addEventListener('click', () => {
-  const audio = document.querySelector('audio')!;
+function setupBackgroundMusic() {
+  const audio = document.createElement('audio');
   audio.volume = 0.3;
+  audio.src = backgroundMusic;
   audio.loop = true;
-  audio.play();
-});
+  audio.autoplay = true;
+
+  window.addEventListener('click', () => {
+    audio.play();
+  });
+
+  window.addEventListener('keydown', () => {
+    audio.play();
+  });
+}
 
 export function easeCameraToZero(state: State, dt: number) {
   const animationSpeed = 0.01;

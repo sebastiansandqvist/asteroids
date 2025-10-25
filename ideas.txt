@@ -1,0 +1,7 @@
+starting menu
+pause menu
+settings (color guy, music volume, sfx volume)
+1p, vs, coop
+>2p?
+improve physics
+high scores?
