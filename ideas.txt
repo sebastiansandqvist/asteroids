@@ -1,7 +1,322 @@
-starting menu
-pause menu
-settings (color guy, music volume, sfx volume)
-1p, vs, coop
->2p?
-improve physics
-high scores?
+# ASTEROIDS - SIMPLIFIED MENU SYSTEM
+
+## Menu Flow
+```
+Start Screen → Main Menu → Game
+                    ↓
+                Settings
+```
+
+## UI Screen Mockups
+
+### 1. START SCREEN (Initial Connection)
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                                                              ║
+║                                                              ║
+║                    A S T E R O I D S                        ║
+║                   ═══════════════════                       ║
+║                                                              ║
+║                                                              ║
+║                  CONNECT A CONTROLLER                       ║
+║                                                              ║
+║                                                              ║
+║                         ◯ ◯ ◯                              ║
+║                                                              ║
+║                                                              ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╗
+```
+*The three circles represent an animated "waiting" indicator that pulses*
+
+### 2. MAIN MENU (One Controller)
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                    A S T E R O I D S                        ║
+║                                                              ║
+║   ┌──────────────────────────────────────────────────────┐  ║
+║   │                                                      │  ║
+║   │  P1: PLAYER_NAME_1  🎮                             │  ║
+║   │                                                      │  ║
+║   └──────────────────────────────────────────────────────┘  ║
+║                                                              ║
+║                  ► SINGLE PLAYER ◄                          ║
+║                                                              ║
+║                                                              ║
+║              (A) Select   (LB+RB) Settings                  ║
+║                                                              ║
+║            P2: Press any button to join                     ║
+╚══════════════════════════════════════════════════════════════╗
+```
+
+### 2b. MAIN MENU (Two Controllers)
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                    A S T E R O I D S                        ║
+║                                                              ║
+║   ┌──────────────────────────────────────────────────────┐  ║
+║   │                                                      │  ║
+║   │  P1: PLAYER_NAME_1  🎮    P2: PLAYER_NAME_2  🎮    │  ║
+║   │                                                      │  ║
+║   └──────────────────────────────────────────────────────┘  ║
+║                                                              ║
+║                  ► SINGLE PLAYER ◄                          ║
+║                      CO-OP                                  ║
+║                      VERSUS                                 ║
+║                                                              ║
+║         (↑↓) Navigate   (A) Select   (LB+RB) Settings      ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╗
+```
+*Either player can navigate and select. Selecting single player starts a game for that player only*
+
+### 3. IN-GAME PAUSE MENU
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                                                              ║
+║                                                              ║
+║                        PAUSED                               ║
+║                                                              ║
+║                                                              ║
+║                      ► RESUME ◄                             ║
+║                         EXIT                                ║
+║                                                              ║
+║                                                              ║
+║                      (A) Select                             ║
+║                                                              ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╗
+```
+
+### 4. SETTINGS MENU
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                       SETTINGS                              ║
+║                                                              ║
+║   ┌─────────────────────────────────────────────────────┐  ║
+║   │                                                      │  ║
+║   │ ► Music Volume    [▓▓▓▓▓▓▓▓░░]  80%              ◄ │  ║
+║   │                                                      │  ║
+║   │   SFX Volume      [▓▓▓▓▓▓▓▓▓▓]  100%               │  ║
+║   │                                                      │  ║
+║   │   Screen Shake    [ON]   OFF                        │  ║
+║   │                                                      │  ║
+║   │   Ship Color      ◄  ▲  ►                          │  ║
+║   │                     ___                             │  ║
+║   │                    [RED]                            │  ║
+║   │                                                      │  ║
+║   └─────────────────────────────────────────────────────┘  ║
+║                                                              ║
+║       (↑↓) Navigate   (←→) Adjust   (B) Back              ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╗
+```
+
+### 5. GAME OVER (Single Player)
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                                                              ║
+║                      GAME OVER                              ║
+║                                                              ║
+║                                                              ║
+║                     SCORE: 12,450                           ║
+║                      LEVEL: 7                               ║
+║                                                              ║
+║                                                              ║
+║                    ► PLAY AGAIN ◄                           ║
+║                      MAIN MENU                              ║
+║                                                              ║
+║                      (A) Select                             ║
+╚══════════════════════════════════════════════════════════════╗
+```
+
+### 6. GAME OVER (Versus)
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                                                              ║
+║                    PLAYER 2 WINS!                           ║
+║                                                              ║
+║                                                              ║
+║                P1: 3,450      P2: 5,230                    ║
+║                                                              ║
+║                                                              ║
+║                    ► REMATCH ◄                             ║
+║                     MAIN MENU                               ║
+║                                                              ║
+║                     (A) Select                              ║
+╚══════════════════════════════════════════════════════════════╗
+```
+
+### 7. GAME OVER (Co-op)
+```
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║                                                              ║
+║                      GAME OVER                              ║
+║                                                              ║
+║                                                              ║
+║                 TEAM SCORE: 18,670                          ║
+║                    LEVEL: 12                                ║
+║                                                              ║
+║            P1: 11,420      P2: 7,250                       ║
+║                                                              ║
+║                    ► TRY AGAIN ◄                           ║
+║                     MAIN MENU                               ║
+║                                                              ║
+║                     (A) Select                              ║
+╚══════════════════════════════════════════════════════════════╗
+```
+
+## Implementation Details
+
+### Navigation States
+Each menu item can be in one of three states:
+1. **Unselected**: Normal text
+2. **Selected**: Shown with `►` and `◄` brackets or highlighting
+3. **Disabled**: Grayed out (if needed for future features)
+
+### Controller Mapping
+- **D-Pad/Left Stick**: Navigate up/down (left/right in settings)
+- **A Button**: Select/Confirm
+- **B Button**: Back/Cancel (only in settings, not used in pause/game over)
+- **X Button**: Quick action (unused for now, reserved)
+- **Y Button**: Quick action (unused for now, reserved)
+- **LB + RB**: Hold together to open settings (from main menu)
+- **Start**: Pause game (during gameplay)
+
+### Menu Behavior Patterns
+```typescript
+enum MenuState {
+  NoController,    // Show "Connect a Controller"
+  MainMenu,       // Show game mode options
+  InGame,         // Game is running
+  Paused,         // Show pause menu
+  GameOver,       // Show results
+  Settings        // Show settings overlay
+}
+
+interface MenuItem {
+  label: string;
+  action: () => void;
+  enabled: boolean;
+}
+
+interface Menu {
+  items: MenuItem[];
+  selectedIndex: number;
+  allowWrap: boolean;  // Whether to wrap from bottom to top
+}
+```
+
+### Navigation Logic
+```typescript
+function handleMenuNavigation(menu: Menu, input: GamepadInput) {
+  // Vertical navigation
+  if (input.up || input.stickUp) {
+    menu.selectedIndex--;
+    if (menu.selectedIndex < 0) {
+      menu.selectedIndex = menu.allowWrap ?
+        menu.items.length - 1 : 0;
+    }
+  }
+
+  if (input.down || input.stickDown) {
+    menu.selectedIndex++;
+    if (menu.selectedIndex >= menu.items.length) {
+      menu.selectedIndex = menu.allowWrap ? 0 :
+        menu.items.length - 1;
+    }
+  }
+
+  // Selection
+  if (input.a) {
+    const item = menu.items[menu.selectedIndex];
+    if (item.enabled) {
+      item.action();
+    }
+  }
+}
+```
+
+### Visual Selection Indicators
+```
+Unselected:     RESUME
+Selected:     ► RESUME ◄
+Disabled:       RESUME    (shown at 30% opacity)
+```
+
+### Settings Menu Special Behavior
+- **Volume Sliders**: When selected, left/right adjusts value
+- **Toggle Options**: When selected, left/right or A toggles
+- **Ship Color**: When selected, left/right cycles through colors
+- Selected row shows arrows `►` and `◄` on the sides
+
+### Ship Color Visual Selector (Settings)
+```
+When selected:
+   White         Red          Blue
+  ► ▲ ◄          ▲            ▲
+    ___          ___          ___
+   [×]          [ ]          [ ]
+```
+
+### Menu Transitions
+- **Fade**: Quick 150ms fade between menu states
+- **Slide**: Selected indicator slides smoothly between options
+- **Scale**: Selected item scales up slightly (1.05x)
+
+### Sound Feedback
+- **Navigate**: Soft tick sound when moving selection
+- **Select**: Confirmation sound when pressing A
+- **Back**: Different sound for backing out
+- **Disabled**: Error sound if selecting disabled item
+
+### Default Selections
+- **Main Menu**: Defaults to first available option
+- **Pause Menu**: Defaults to "Resume"
+- **Game Over**: Defaults to "Play Again" / "Rematch" / "Try Again"
+- **Settings**: Remembers last selected setting
+
+### Quick Start Flows
+**Solo Play (1 controller)**:
+1. Connect controller
+2. Navigate to Single Player (already selected by default)
+3. Press A → Playing (2 inputs total)
+
+**Solo Play (2 controllers, P2 wants to play)**:
+1. Both connected
+2. P2 navigates to Single Player
+3. P2 presses A → P2 playing solo (2 inputs)
+
+**Co-op (2 controllers)**:
+1. Both connected
+2. Either player navigates to Co-op
+3. Press A → Both playing co-op (3 inputs)
+
+**Versus (2 controllers)**:
+1. Both connected
+2. Either player navigates to Versus
+3. Press A → Both playing versus (3 inputs)
+
+### Accessibility Considerations
+- High contrast selection indicators
+- Clear visual hierarchy
+- Consistent navigation patterns
+- No time pressure on menu selections
+- Audio feedback for all actions
+- Large, readable text
+
+### Implementation Priority
+1. Basic navigation system with selection state
+2. Main menu with mode selection
+3. Pause menu
+4. Game over screens
+5. Settings menu with value adjustments
+6. Polish (animations, sounds, transitions)
