@@ -777,10 +777,10 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   }
 
   {
-    state.ship.fireCooldownMs = Math.max(0, state.ship.fireCooldownMs - dt);
+    state.ship.fireCooldownMs = 0; // Math.max(0, state.ship.fireCooldownMs - dt);
 
     if (state.ship.respawnMs <= 0 && state.ship.fireCooldownMs <= 0 && isShooting()) {
-      state.ship.fireCooldownMs = 278 / 2;
+      state.ship.fireCooldownMs = 0; // 278 / 2;
       const bulletSpeed = Math.min(worldWidthUnits, worldHeightUnits) / 1000; // half the playfieh per second
       state.ship.bullets.push({
         x: state.ship.x + Math.cos(state.ship.angle) * state.ship.size,
