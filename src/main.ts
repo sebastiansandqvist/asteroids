@@ -796,7 +796,9 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
         state.ship.bullets[0]!.ttlMs = 0;
       }
 
-      sounds('shoot').play({ volume: 2 });
+      if (!godmode) {
+        sounds('shoot').play({ volume: 2 });
+      }
       gamepads.singlePlayer.rumble(1, HapticIntensity.Light);
     }
   }
