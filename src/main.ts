@@ -7,6 +7,8 @@ import { spawnSparkBurst, tickExplosions, drawExplosions } from './explosions';
 import { createOffscreenCanvas, setupWebglCanvas, drawWithShaders } from './shader';
 import backgroundMusic from '../public/sounds/moonlight-sonata.mp3';
 
+const godmode = window.location.hash.includes('godmode');
+
 function computeViewport(rect: DOMRect) {
   const vw = rect.width / 100;
   const vh = rect.height / 100;
@@ -25,7 +27,7 @@ type Asteroid = State['asteroids'][number];
 type Ship = State['ship'];
 type Bullet = State['ship']['bullets'][number];
 
-const maxActiveBullets = 10000;
+const maxActiveBullets = godmode ? 100000 : 10;
 const explosionDurationMsAsteroid = 400;
 const explosionDurationMsShip = 600;
 
@@ -777,10 +779,10 @@ function update(state: State, dt: number, worldWidthUnits: number, worldHeightUn
   }
 
   {
-    state.ship.fireCooldownMs = 0; // Math.max(0, state.ship.fireCooldownMs - dt);
+    state.ship.fireCooldownMs = godmode ? 0 : Math.max(0, state.ship.fireCooldownMs - dt);
 
     if (state.ship.respawnMs <= 0 && state.ship.fireCooldownMs <= 0 && isShooting()) {
-      state.ship.fireCooldownMs = 0; // 278 / 2;
+      state.ship.fireCooldownMs = godmode ? 0 : 278 / 2;
       const bulletSpeed = Math.min(worldWidthUnits, worldHeightUnits) / 1000; // half the playfieh per second
       state.ship.bullets.push({
         x: state.ship.x + Math.cos(state.ship.angle) * state.ship.size,
