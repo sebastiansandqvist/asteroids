@@ -25,7 +25,7 @@ type Asteroid = State['asteroids'][number];
 type Ship = State['ship'];
 type Bullet = State['ship']['bullets'][number];
 
-const maxActiveBullets = 10;
+const maxActiveBullets = 10000;
 const explosionDurationMsAsteroid = 400;
 const explosionDurationMsShip = 600;
 
